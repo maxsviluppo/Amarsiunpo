@@ -78,6 +78,31 @@ const AppBottomNav = () => {
   const [pendingCount, setPendingCount] = useState(0);
   const [chatCount, setChatCount] = useState(0);
   const [isNavExpanded, setIsNavExpanded] = useState(true);
+  const scrollTimeout = React.useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    const isScrollPage = location.pathname.startsWith('/feed') || location.pathname.startsWith('/bacheca');
+    if (!isScrollPage) {
+      setIsNavExpanded(true);
+      return;
+    }
+
+    const handleScroll = () => {
+      // Start collapsing when scrolling
+      if (isNavExpanded) setIsNavExpanded(false);
+
+      if (scrollTimeout.current) clearTimeout(scrollTimeout.current);
+      scrollTimeout.current = setTimeout(() => {
+        setIsNavExpanded(true);
+      }, 2000); // Re-expand after 2 seconds of no scroll
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      if (scrollTimeout.current) clearTimeout(scrollTimeout.current);
+    };
+  }, [location.pathname, isNavExpanded]);
 
   // Determina il tab attivo in base al percorso
   const getActiveTab = () => {
@@ -135,7 +160,7 @@ const AppBottomNav = () => {
   if (shouldHide) return null;
 
   return (
-    <div className="fixed bottom-6 left-0 right-0 z-[100] px-4 pointer-events-none flex justify-center">
+    <div className="fixed bottom-8 left-0 right-0 z-[100] px-4 pointer-events-none flex justify-center">
       <motion.div
         drag="x"
         dragConstraints={{ left: 0, right: 0 }}
@@ -146,21 +171,29 @@ const AppBottomNav = () => {
         }}
         initial={false}
         animate={{
-          x: isNavExpanded ? 0 : "38vw",
-          scale: isNavExpanded ? 1 : 0.9,
+          x: isNavExpanded ? 0 : -160,
+          scale: 1,
           opacity: 1
         }}
-        transition={{ type: 'spring', damping: 20, stiffness: 150 }}
+        transition={{
+          duration: 0.2 // Quick static transition
+        }}
         className={cn(
-          "pointer-events-auto shadow-2xl flex items-center border border-white/10",
+          "pointer-events-auto shadow-2xl flex items-center border border-white/10 transition-all duration-500",
+          isNavExpanded ? "z-[110]" : "z-[100]",
           isNavExpanded
             ? "w-full max-w-md bg-stone-900/95 backdrop-blur-2xl rounded-[40px] p-2 gap-1"
             : "w-14 h-14 bg-stone-900 rounded-full cursor-pointer justify-center"
         )}
       >
         {!isNavExpanded ? (
-          <div onClick={() => setIsNavExpanded(true)} className="flex items-center justify-center text-white w-full h-full">
+          <div onClick={() => setIsNavExpanded(true)} className="flex items-center justify-center text-white w-full h-full relative">
             <Home className="w-6 h-6" />
+            {(pendingCount + chatCount) > 0 && (
+              <span className="absolute top-1 right-1 w-4 h-4 bg-rose-500 text-white text-[8px] font-black rounded-full flex items-center justify-center border-2 border-stone-900 shadow-sm animate-pulse">
+                {pendingCount + chatCount}
+              </span>
+            )}
           </div>
         ) : (
           <>
@@ -260,7 +293,7 @@ const AppBottomNav = () => {
           </>
         )}
       </motion.div>
-    </div>
+    </div >
   );
 };
 
@@ -271,9 +304,9 @@ const GlobalFlashBanner = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Hide on some pages
-  const hideOn = ['/live-chat', '/register', '/onboarding', '/edit-profile', '/admin'];
-  const shouldHide = hideOn.some(p => location.pathname.startsWith(p));
+  // Show ONLY on /bacheca
+  const isBacheca = location.pathname.startsWith('/bacheca');
+  const shouldHide = !isBacheca;
 
   const fetchGlobalBanner = async () => {
     try {
@@ -311,72 +344,85 @@ const GlobalFlashBanner = () => {
     };
   }, [isBannerExpanded]);
 
-  if (shouldHide || bannerMessages.length === 0) return null;
+  if (shouldHide) return null;
 
   return (
-    <motion.div
-      id="msg-floating-banner"
-      drag="x"
-      dragConstraints={{ left: 0, right: 0 }}
-      dragElastic={0.1}
-      onDragEnd={(_, info) => {
-        if (info.offset.x > 50) setIsBannerExpanded(false);
-        if (info.offset.x < -50) setIsBannerExpanded(true);
-      }}
-      initial={false}
-      animate={{
-        x: isBannerExpanded ? 0 : 0,
-        scale: isBannerExpanded ? 1 : 0.9,
-        opacity: 1
-      }}
-      transition={{ type: 'spring', damping: 20, stiffness: 150 }}
-      className={cn(
-        "fixed z-[45] bottom-32 right-0 shadow-2xl flex items-center border border-white/20",
-        isBannerExpanded
-          ? "w-[94%] max-w-[360px] bg-rose-600 rounded-l-[32px] p-4 text-white"
-          : "w-14 h-14 bg-rose-600 rounded-full cursor-pointer justify-center"
-      )}
-    >
-      {!isBannerExpanded ? (
-        <div
-          onClick={(e) => { e.stopPropagation(); setIsBannerExpanded(true); }}
-          className="w-full h-full flex items-center justify-center text-white"
-        >
-          <Send className="w-6 h-6 rotate-[-45deg]" />
-        </div>
-      ) : (
-        <div className="w-full flex items-center justify-between gap-1 overflow-hidden">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={bannerMessages[bannerIndex]?.id || bannerIndex}
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 10 }}
-              transition={{ duration: 0.3 }}
-              className="flex-1 flex items-center gap-2 pl-1 overflow-hidden cursor-pointer"
-              onClick={() => navigate(`/profile-detail/${bannerMessages[bannerIndex]?.user_id}`)}
-            >
-              <div className="w-[52px] h-[52px] rounded-[18px] p-[2px] bg-white/20 shrink-0 shadow-md">
-                <img src={bannerMessages[bannerIndex]?.photo_url || `https://picsum.photos/seed/${bannerMessages[bannerIndex]?.name}/100`} className="w-full h-full object-cover rounded-[16px]" />
-              </div>
+    <div className="fixed bottom-[140px] right-0 z-[120] pointer-events-none">
+      <motion.div
+        id="msg-floating-banner"
+        drag="x"
+        dragConstraints={{ left: 0, right: 0 }}
+        dragElastic={0.1}
+        onDragEnd={(_, info) => {
+          if (info.offset.x > 50) setIsBannerExpanded(false);
+          if (info.offset.x < -50) setIsBannerExpanded(true);
+        }}
+        initial={false}
+        animate={{
+          x: isBannerExpanded ? 0 : -5,
+          scale: 1,
+          opacity: 1
+        }}
+        transition={{ type: 'spring', damping: 25, stiffness: 250 }}
+        className={cn(
+          "pointer-events-auto shadow-2xl flex items-center border-l border-t border-b border-white/10 transition-all duration-500",
+          isBannerExpanded
+            ? "z-[130] w-[calc(100vw-32px)] max-w-md bg-rose-600 rounded-l-[30px] rounded-r-none p-2 pr-6 gap-1 text-white"
+            : "z-[120] w-14 h-14 bg-rose-600 rounded-l-2xl rounded-r-none cursor-pointer justify-center pl-1"
+        )}
+      >
+        {!isBannerExpanded ? (
+          <div
+            onClick={(e) => { e.stopPropagation(); setIsBannerExpanded(true); }}
+            className="w-full h-full flex items-center justify-center text-white relative"
+          >
+            <Send className="w-6 h-6 rotate-[-45deg] mr-1" />
+            {bannerMessages.length > 0 && (
+              <span className="absolute -top-1 -left-1 min-w-[18px] h-[18px] bg-white text-rose-600 text-[10px] font-black rounded-full flex items-center justify-center border-2 border-rose-600 shadow-sm px-1">
+                {bannerMessages.length}
+              </span>
+            )}
+          </div>
+        ) : (
+          <div className="w-full flex items-center justify-between gap-1 overflow-hidden">
+            {bannerMessages.length > 0 ? (
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={bannerMessages[bannerIndex]?.id || bannerIndex}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 10 }}
+                  transition={{ duration: 0.3 }}
+                  className="flex-1 flex items-center gap-2 pl-1 overflow-hidden cursor-pointer"
+                  onClick={() => navigate(`/profile-detail/${bannerMessages[bannerIndex]?.user_id}`)}
+                >
+                  <div className="w-[52px] h-[52px] rounded-[18px] p-[2px] bg-white/20 shrink-0 shadow-md">
+                    <img src={bannerMessages[bannerIndex]?.photo_url || `https://picsum.photos/seed/${bannerMessages[bannerIndex]?.name}/100`} className="w-full h-full object-cover rounded-[16px]" />
+                  </div>
 
-              <div className="flex flex-col flex-1 min-w-0 pr-1">
-                <div className="flex items-baseline gap-1.5 leading-tight mb-0.5">
-                  <span className="text-[11px] font-black text-white truncate">{bannerMessages[bannerIndex]?.name}</span>
-                  <span className="text-[9px] font-bold text-rose-200 capitalize shrink-0">{bannerMessages[bannerIndex]?.city}</span>
-                </div>
+                  <div className="flex flex-col flex-1 min-w-0 pr-1">
+                    <div className="flex items-baseline gap-1.5 leading-tight mb-0.5">
+                      <span className="text-[11px] font-black text-white truncate">{bannerMessages[bannerIndex]?.name}</span>
+                      <span className="text-[9px] font-bold text-rose-200 capitalize shrink-0">{bannerMessages[bannerIndex]?.city}</span>
+                    </div>
 
-                <div className="bg-white rounded-[10px] p-2 relative shadow-sm">
-                  <p className="text-[10px] text-stone-900 font-bold leading-[1.15] line-clamp-2 break-words">
-                    {bannerMessages[bannerIndex]?.message}
-                  </p>
-                </div>
+                    <div className="bg-white rounded-[10px] p-2 relative shadow-sm">
+                      <p className="text-[10px] text-stone-900 font-bold leading-[1.15] line-clamp-2 break-words">
+                        {bannerMessages[bannerIndex]?.message}
+                      </p>
+                    </div>
+                  </div>
+                </motion.div>
+              </AnimatePresence>
+            ) : (
+              <div className="flex-1 flex items-center justify-center py-4 text-white font-bold text-xs">
+                Nessun nuovo messaggio flash
               </div>
-            </motion.div>
-          </AnimatePresence>
-        </div>
-      )}
-    </motion.div>
+            )}
+          </div>
+        )}
+      </motion.div>
+    </div >
   );
 };
 
@@ -576,9 +622,9 @@ const ProfileCard: React.FC<{ profile: UserProfile; onInteract?: () => void }> =
         animate={{ opacity: 1, y: 0 }}
         className="group relative overflow-hidden rounded-3xl bg-white border border-stone-200 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col h-full"
       >
-        <div className="aspect-[3/4.5] overflow-hidden relative shrink-0">
+        <div className="aspect-[3/4.8] overflow-hidden relative shrink-0">
           <ProfileAvatar user={profile} className="w-full h-full" iconSize="w-20 h-20" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
 
           {/* Test Match Button on Photo */}
           {!showScore && (
@@ -2422,17 +2468,23 @@ const BachecaPage = () => {
             {filteredProfiles.map(profile => (
               <div key={profile.id} className="relative group">
                 <Link to={`/profile-detail/${profile.id}`}>
-                  <div className="aspect-[4/5] rounded-[20px] overflow-hidden bg-stone-200 relative shadow-sm">
+                  <div className="aspect-[3/5.5] rounded-[28px] overflow-hidden bg-stone-200 relative shadow-md group-hover:shadow-2xl transition-all duration-300 border border-stone-100/50">
                     <img
                       src={profile.photos?.[0] || profile.photo_url || `https://picsum.photos/seed/${profile.name}/400/500`}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000"
                       onContextMenu={e => e.preventDefault()}
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                    <div className="absolute bottom-0 left-0 right-0 p-3">
-                      <p className="text-white text-xs font-black truncate">{profile.name}{profile.dob && calculateAge(profile.dob) > 0 ? `, ${calculateAge(profile.dob)}` : ''}</p>
-                      {profile.city && <p className="text-white/70 text-[9px] font-semibold truncate flex items-center gap-0.5 mb-0.5"><MapPin className="w-2.5 h-2.5" />{profile.city}</p>}
-                      <p className="text-white/60 text-[9px] font-bold truncate">
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/100 via-black/40 to-transparent" />
+                    <div className="absolute bottom-0 left-0 right-0 p-4">
+                      <p className="text-white text-[13px] font-black drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] truncate mb-0.5">
+                        {profile.name}{profile.dob && calculateAge(profile.dob) > 0 ? `, ${calculateAge(profile.dob)}` : ''}
+                      </p>
+                      {profile.city && (
+                        <p className="text-white/90 text-[10px] font-bold truncate flex items-center gap-1 drop-shadow-md">
+                          <MapPin className="w-2.5 h-2.5" />{profile.city}
+                        </p>
+                      )}
+                      <p className="text-white/70 text-[9px] font-black truncate uppercase tracking-tighter drop-shadow-md mt-1">
                         {profile.gender} • {(profile.orientation || []).join(', ')}
                       </p>
                     </div>
