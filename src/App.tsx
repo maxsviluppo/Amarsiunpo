@@ -225,6 +225,20 @@ const AppBottomNav = () => {
               </motion.div>
             </Link>
 
+            {/* Feed */}
+            <Link to="/feed" className="relative flex-1 group">
+              <motion.div
+                whileTap={{ scale: 0.9 }}
+                className={cn(
+                  "flex flex-col items-center py-2.5 rounded-full aspect-square justify-center transition-all duration-300",
+                  activeTab === 'feed' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
+                )}
+              >
+                <LayoutGrid className="w-5 h-5 mb-0.5" />
+                <span className="text-[6px] font-black uppercase tracking-wider">Feed</span>
+              </motion.div>
+            </Link>
+
             {/* Amici (SoulLink) */}
             <Link to="/amici" className="relative flex-1 group">
               <motion.div
@@ -260,20 +274,6 @@ const AppBottomNav = () => {
                   )}
                 </div>
                 <span className="text-[6px] font-black uppercase tracking-wider">Chat</span>
-              </motion.div>
-            </Link>
-
-            {/* Feed */}
-            <Link to="/feed" className="relative flex-1 group">
-              <motion.div
-                whileTap={{ scale: 0.9 }}
-                className={cn(
-                  "flex flex-col items-center py-2.5 rounded-full aspect-square justify-center transition-all duration-300",
-                  activeTab === 'feed' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
-                )}
-              >
-                <LayoutGrid className="w-5 h-5 mb-0.5" />
-                <span className="text-[6px] font-black uppercase tracking-wider">Feed</span>
               </motion.div>
             </Link>
 
@@ -3037,7 +3037,7 @@ const AmiciPage = () => {
       .from('soul_links')
       .select(`
       id, sender_id, receiver_id, status, created_at,
-      receiver:users!receiver_id(id, name, surname, photos, photo_url, city, is_online, orientation, birth_date)
+      receiver:users!receiver_id(id, name, surname, photos, photo_url, city, is_online, orientation, dob)
       `)
       .eq('sender_id', userId);
 
@@ -3045,7 +3045,7 @@ const AmiciPage = () => {
       .from('soul_links')
       .select(`
       id, sender_id, receiver_id, status, created_at,
-      sender:users!sender_id(id, name, surname, photos, photo_url, city, is_online, orientation, birth_date)
+      sender:users!sender_id(id, name, surname, photos, photo_url, city, is_online, orientation, dob)
       `)
       .eq('receiver_id', userId);
 
@@ -3349,9 +3349,9 @@ const AmiciPage = () => {
                     <div className="flex-1 min-w-0 pr-2">
                       <h3 className="text-base font-black text-stone-900 truncate">{f.other_user?.name}</h3>
                       <div className="mt-0.5 space-y-0.5">
-                        {f.other_user?.birth_date && (
-                          <p className="text-[10px] text-rose-600 font-black uppercase tracking-widest">
-                            ETA' {calculateAge(f.other_user.birth_date)}
+                        {f.other_user?.dob && (
+                          <p className="text-[10px] text-stone-900 font-black uppercase tracking-widest">
+                            {calculateAge(f.other_user.dob)}
                           </p>
                         )}
                         {f.other_user?.city && (
@@ -3398,20 +3398,17 @@ const AmiciPage = () => {
           </div>
         </div>
 
-        {
-          loading && (
-            <div className="py-10 flex justify-center">
-              <Sparkles className="w-8 h-8 text-rose-600 animate-pulse" />
-            </div>
-          )
-        }
-      </div >
-    </div >
+        {loading && (
+          <div className="py-10 flex justify-center">
+            <Sparkles className="w-8 h-8 text-rose-600 animate-pulse" />
+          </div>
+        )}
+      </div>
+    </div>
   );
 };
 
-// --- Admin Page ---
-// --- Admin Page ---
+// ── Admin Page ──
 const AdminPage = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -5195,11 +5192,11 @@ const FeedComponent = ({ userId, isOwner, global = false }: { userId: any, isOwn
       let query = supabase
         .from('posts')
         .select(`
-                  *,
-                  user:users (name, photos, photo_url, gender, orientation),
-                  post_interactions!post_interactions_post_id_fkey(type),
-                  post_comments(id)
-                  `)
+                    *,
+                    user:users (name, photos, photo_url, gender, orientation),
+                    post_interactions!post_interactions_post_id_fkey(type),
+                    post_comments(id)
+                    `)
         .order('created_at', { ascending: false });
 
       if (!global) {
@@ -6121,9 +6118,9 @@ const ChatPage = () => {
       const { data: requestsData } = await supabase
         .from('chat_requests')
         .select(`
-          *,
-          from_user:users!from_user_id(id, name, surname, photo_url, photos)
-        `)
+                      *,
+                      from_user:users!from_user_id(id, name, surname, photo_url, photos)
+                      `)
         .eq('to_user_id', userId)
         .order('created_at', { ascending: false });
 
@@ -6146,10 +6143,10 @@ const ChatPage = () => {
       const { data: msgs } = await supabase
         .from('room_messages')
         .select(`
-          id, text, created_at, sender_id, receiver_id,
-          sender:users!sender_id(id, name, photos, photo_url, is_online, city),
-          receiver:users!receiver_id(id, name, photos, photo_url, is_online, city)
-        `)
+                      id, text, created_at, sender_id, receiver_id,
+                      sender:users!sender_id(id, name, photos, photo_url, is_online, city),
+                      receiver:users!receiver_id(id, name, photos, photo_url, is_online, city)
+                      `)
         .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
         .order('created_at', { ascending: false });
 
@@ -6336,6 +6333,178 @@ const ChatPage = () => {
   );
 };
 
+
+// ── Chat Request Item Component ──
+const ChatRequestItem = ({ req, index, bounceNotif, handleDeleteChatRequest, replyingTo, setReplyingTo, replyText, setReplyText, handleSendReply, isSendingReply }: any) => {
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: -20 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: index * 0.1 }}
+      className={cn(
+        "bg-white rounded-[24px] border border-stone-100 shadow-sm overflow-hidden",
+        bounceNotif && "animate-bounce"
+      )}
+    >
+      <div className="p-4 flex gap-4">
+        <div className="w-14 h-14 rounded-2xl overflow-hidden border border-stone-100 shrink-0">
+          <img src={req.photo_url || `https://picsum.photos/seed/${req.from_user_id}/100`} className="w-full h-full object-cover" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex justify-between items-start mb-1">
+            <h3 className="text-sm font-black text-stone-900 truncate">{req.name}</h3>
+            <span className="text-[9px] text-stone-400 font-bold uppercase tracking-widest">{new Date(req.created_at).toLocaleDateString()}</span>
+          </div>
+          <p className="text-[12px] text-stone-600 leading-relaxed italic line-clamp-2">"{req.message}"</p>
+        </div>
+      </div>
+
+      <div className="bg-stone-50/50 px-4 py-3 flex gap-2 border-t border-stone-50">
+        {replyingTo === req.from_user_id ? (
+          <div className="flex-1 space-y-3">
+            <textarea
+              autoFocus
+              value={replyText}
+              onChange={(e) => setReplyText(e.target.value)}
+              placeholder="Scrivi la tua risposta..."
+              className="w-full bg-white border border-stone-200 rounded-[16px] p-4 text-[12px] font-medium resize-none focus:ring-2 focus:ring-rose-200"
+            />
+            <div className="flex gap-2">
+              <button
+                disabled={isSendingReply || !replyText.trim()}
+                onClick={() => handleSendReply(req.from_user_id)}
+                className="flex-1 bg-rose-600 text-white py-2.5 rounded-[12px] text-[10px] font-black uppercase tracking-widest shadow-md"
+              >
+                {isSendingReply ? 'Invio...' : 'Invia Risposta'}
+              </button>
+              <button
+                onClick={() => setReplyingTo(null)}
+                className="px-4 bg-stone-100 text-stone-500 py-2.5 rounded-[12px] text-[10px] font-black uppercase tracking-widest"
+              >
+                Annulla
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <button
+              onClick={() => setReplyingTo(req.from_user_id)}
+              className="flex-1 bg-rose-600 text-white py-2.5 rounded-[12px] text-[10px] font-black uppercase tracking-widest shadow-md flex items-center justify-center gap-2"
+            >
+              <MessageSquare className="w-3.5 h-3.5" /> Rispondi
+            </button>
+            <button
+              onClick={() => handleDeleteChatRequest(req.id)}
+              className="w-10 h-10 bg-white border border-stone-200 rounded-[12px] flex items-center justify-center text-stone-400 hover:text-rose-600 transition-colors"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </>
+        )}
+      </div>
+    </motion.div>
+  );
+};
+
+// ── Live Chat Modal Component ──
+const LiveChatModal = ({ profile, currentUser, onClose }: any) => {
+  const [messages, setMessages] = useState<any[]>([]);
+  const [text, setText] = useState('');
+  const messagesEndRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const fetchMsgs = async () => {
+      const { data } = await supabase
+        .from('room_messages')
+        .select('*')
+        .or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${profile.id}),and(sender_id.eq.${profile.id},receiver_id.eq.${currentUser.id})`)
+        .order('created_at', { ascending: true });
+      if (data) setMessages(data);
+    };
+    fetchMsgs();
+
+    const channel = supabase.channel(`modal_chat_${profile.id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'room_messages' }, (payload) => {
+        const m = payload.new;
+        if ((m.sender_id === currentUser.id && m.receiver_id === profile.id) || (m.sender_id === profile.id && m.receiver_id === currentUser.id)) {
+          setMessages(prev => [...prev, m]);
+        }
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [profile.id, currentUser.id]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const handleSend = async () => {
+    if (!text.trim()) return;
+    const msgText = text;
+    setText('');
+    await supabase.from('room_messages').insert([{
+      sender_id: currentUser.id,
+      receiver_id: profile.id,
+      text: msgText
+    }]);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <motion.div
+        initial={{ y: '100%' }}
+        animate={{ y: 0 }}
+        exit={{ y: '100%' }}
+        className="bg-white w-full max-w-lg h-[85vh] sm:h-[70vh] rounded-t-[32px] sm:rounded-[32px] flex flex-col overflow-hidden shadow-2xl"
+      >
+        <div className="p-4 border-b border-stone-100 flex items-center justify-between bg-stone-50/80">
+          <div className="flex items-center gap-3">
+            <ProfileAvatar user={profile} className="w-10 h-10 rounded-full" iconSize="w-5 h-5" />
+            <div>
+              <h3 className="text-sm font-black text-stone-900">{profile.name}</h3>
+              <p className="text-[10px] text-emerald-500 font-bold uppercase">Chat Live</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-stone-400 border border-stone-100">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-stone-50/30">
+          {messages.map((m) => {
+            const isOwn = m.sender_id === currentUser.id;
+            return (
+              <div key={m.id} className={cn("flex flex-col", isOwn ? "items-end" : "items-start")}>
+                <div className={cn(
+                  "max-w-[80%] p-3 rounded-2xl text-[13px] shadow-sm",
+                  isOwn ? "bg-rose-600 text-white rounded-tr-none" : "bg-white text-stone-800 rounded-tl-none border border-stone-100"
+                )}>
+                  {m.text}
+                </div>
+              </div>
+            );
+          })}
+          <div ref={messagesEndRef} />
+        </div>
+
+        <div className="p-4 bg-white border-t border-stone-100 flex gap-2">
+          <input
+            autoFocus
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+            placeholder="Scrivi un messaggio..."
+            className="flex-1 bg-stone-50 border border-stone-100 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-rose-200"
+          />
+          <button onClick={handleSend} className="w-12 h-12 bg-rose-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-rose-200 active:scale-90">
+            <Send className="w-5 h-5 fill-current" />
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
 const ProfilePage = () => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -6376,9 +6545,9 @@ const ProfilePage = () => {
       const { data: profileData, error: profileErr } = await supabase
         .from('users')
         .select(`
-                      *,
-                      interactions!to_user_id(type)
-                      `)
+                          *,
+                          interactions!to_user_id(type)
+                          `)
         .eq('id', userId)
         .single();
 
@@ -6401,9 +6570,9 @@ const ProfilePage = () => {
       const { data: requestsData, error: requestsErr } = await supabase
         .from('chat_requests')
         .select(`
-                      *,
-                      from_user:users!from_user_id(name, surname, photo_url, photos)
-                      `)
+                          *,
+                          from_user:users!from_user_id(name, surname, photo_url, photos)
+                          `)
         .eq('to_user_id', userId)
         .order('created_at', { ascending: false });
 
@@ -6430,10 +6599,10 @@ const ProfilePage = () => {
         const { data: msgs } = await supabase
           .from('room_messages')
           .select(`
-            id, text, created_at, sender_id, receiver_id,
-            sender:users!sender_id(id, name, photos, photo_url, is_online, city),
-            receiver:users!receiver_id(id, name, photos, photo_url, is_online, city)
-          `)
+                          id, text, created_at, sender_id, receiver_id,
+                          sender:users!sender_id(id, name, photos, photo_url, is_online, city),
+                          receiver:users!receiver_id(id, name, photos, photo_url, is_online, city)
+                          `)
           .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
           .order('created_at', { ascending: false });
 
