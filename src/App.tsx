@@ -141,13 +141,13 @@ const AppBottomNav = () => {
         transition={{ type: 'spring', damping: 20, stiffness: 100 }}
         className="max-w-md mx-auto bg-stone-900/90 backdrop-blur-2xl border border-white/10 shadow-[0_20px_40px_rgba(0,0,0,0.5)] rounded-[32px] p-2 flex items-center justify-between gap-1 pointer-events-auto"
       >
-        {/* Home - Blue */}
+        {/* Home */}
         <Link to="/" className="relative flex-1 group">
           <motion.div
             whileTap={{ scale: 0.9 }}
             className={cn(
               "flex flex-col items-center py-2.5 rounded-2xl transition-all duration-300",
-              activeTab === 'home' ? "bg-sky-500 text-white shadow-lg shadow-sky-500/30" : "text-stone-400"
+              activeTab === 'home' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
             )}
           >
             <Home className="w-5 h-5 mb-1" />
@@ -155,13 +155,13 @@ const AppBottomNav = () => {
           </motion.div>
         </Link>
 
-        {/* Bacheca - Amber */}
+        {/* Bacheca */}
         <Link to="/bacheca" className="relative flex-1 group">
           <motion.div
             whileTap={{ scale: 0.9 }}
             className={cn(
               "flex flex-col items-center py-2.5 rounded-2xl transition-all duration-300",
-              activeTab === 'bacheca' ? "bg-orange-500 text-white shadow-lg shadow-orange-500/30" : "text-stone-400"
+              activeTab === 'bacheca' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
             )}
           >
             <Users className="w-5 h-5 mb-1" />
@@ -169,51 +169,51 @@ const AppBottomNav = () => {
           </motion.div>
         </Link>
 
-        {/* Amici (SoulLink) - Emerald */}
+        {/* Amici (SoulLink) */}
         <Link to="/amici" className="relative flex-1 group">
           <motion.div
             whileTap={{ scale: 0.9 }}
             className={cn(
               "flex flex-col items-center py-2.5 rounded-2xl transition-all duration-300",
-              activeTab === 'soullink' ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/30" : "text-stone-400"
+              activeTab === 'soullink' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
             )}
           >
             <div className="relative">
               <UserCheck className="w-5 h-5 mb-1" />
               {pendingCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-500 text-white text-[7px] font-black rounded-full flex items-center justify-center border-2 border-stone-800 shadow-sm">{pendingCount}</span>
+                <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-500 text-white text-[7px] font-black rounded-full flex items-center justify-center border-2 border-stone-900 shadow-sm">{pendingCount}</span>
               )}
             </div>
             <span className="text-[7px] font-black uppercase tracking-wider">Amici</span>
           </motion.div>
         </Link>
 
-        {/* Chat - Indigo */}
+        {/* Chat */}
         <Link to="/chat" className="relative flex-1 group">
           <motion.div
             whileTap={{ scale: 0.9 }}
             className={cn(
               "flex flex-col items-center py-2.5 rounded-2xl transition-all duration-300",
-              activeTab === 'chat' ? "bg-indigo-500 text-white shadow-lg shadow-indigo-500/30" : "text-stone-400"
+              activeTab === 'chat' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
             )}
           >
             <div className="relative">
               <MessageCircle className="w-5 h-5 mb-1" />
               {chatCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-500 text-white text-[7px] font-black rounded-full flex items-center justify-center border-2 border-stone-800 shadow-sm">{chatCount}</span>
+                <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-500 text-white text-[7px] font-black rounded-full flex items-center justify-center border-2 border-stone-900 shadow-sm">{chatCount}</span>
               )}
             </div>
             <span className="text-[7px] font-black uppercase tracking-wider">Chat</span>
           </motion.div>
         </Link>
 
-        {/* Feed - Violet */}
+        {/* Feed */}
         <Link to="/feed" className="relative flex-1 group">
           <motion.div
             whileTap={{ scale: 0.9 }}
             className={cn(
               "flex flex-col items-center py-2.5 rounded-2xl transition-all duration-300",
-              activeTab === 'feed' ? "bg-violet-500 text-white shadow-lg shadow-violet-500/30" : "text-stone-400"
+              activeTab === 'feed' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
             )}
           >
             <LayoutGrid className="w-5 h-5 mb-1" />
@@ -221,13 +221,13 @@ const AppBottomNav = () => {
           </motion.div>
         </Link>
 
-        {/* SoulMatch (Heart Button) - Rose */}
+        {/* SoulMatch (Heart Button) */}
         <Link to="/soul-match" className="relative flex-1 group">
           <motion.div
             whileTap={{ scale: 0.9 }}
             className={cn(
               "flex flex-col items-center py-2.5 rounded-2xl transition-all duration-300",
-              activeTab === 'soulmatch' ? "bg-rose-600 text-white shadow-lg shadow-rose-500/40" : "text-stone-400"
+              activeTab === 'soulmatch' ? "bg-rose-600 text-white shadow-lg shadow-rose-500/40" : "text-stone-400 hover:text-white"
             )}
           >
             <Heart className={cn("w-5 h-5 mb-1", activeTab === 'soulmatch' ? "fill-current" : "")} />
@@ -236,8 +236,6 @@ const AppBottomNav = () => {
         </Link>
       </motion.div>
     </div>
-  );
-};
   );
 };
 
@@ -934,9 +932,7 @@ const HomePage = () => {
         <p className="text-stone-300 text-[9px] font-black uppercase tracking-[0.3em]">SoulMatch &copy; 2025</p>
       </div>
 
-      {/* Footer */}
       <AppFooter />
-      <AppBottomNav activeTab="home" />
     </div>
   );
 };
@@ -1781,32 +1777,6 @@ const ProfileDetailPage = () => {
         </div>
       </div>
 
-      <AppBottomNav
-        activeTab="profile"
-        customCenter={
-          chatStatus === 'pending' ? (
-            <div className="flex flex-col items-center gap-1">
-              <div className="w-14 h-14 -mt-6 rounded-[22px] bg-emerald-500 flex items-center justify-center shadow-xl shadow-emerald-400/40 text-white">
-                <CheckCircle className="w-6 h-6" />
-              </div>
-              <span className="text-[9px] font-black uppercase tracking-widest text-emerald-600">Inviato</span>
-            </div>
-          ) : (
-            <button
-              onClick={handleOpenMessageModal}
-              className="flex flex-col items-center gap-1"
-            >
-              <div className="w-14 h-14 -mt-6 rounded-[22px] bg-rose-600 flex items-center justify-center shadow-xl shadow-rose-400/40 text-white active:scale-90 transition-all">
-                <MessageSquare className="w-6 h-6 fill-current" />
-              </div>
-              <span className="text-[9px] font-black uppercase tracking-widest text-rose-600">
-                {chatStatus === 'approved' ? 'Chat' : 'Scrivi'}
-              </span>
-            </button>
-          )
-        }
-      />
-
       {/* ── MESSAGE MODAL ── */}
       <AnimatePresence>
         {isMessageModalOpen && (
@@ -1850,8 +1820,6 @@ const ProfileDetailPage = () => {
           </div>
         )}
       </AnimatePresence>
-
-      <AppBottomNav />
     </div>
   );
 };
@@ -2372,7 +2340,7 @@ const BachecaPage = () => {
         )}
       </div>
 
-      <AppBottomNav activeTab="bacheca" />
+
 
       {/* ── NEW FLOATING MSG WIDGET ── */}
       {bannerMessages.length > 0 && (
@@ -2832,7 +2800,6 @@ const SoulMatchPage = () => {
           )}
         </AnimatePresence>
       </div>
-      <AppBottomNav activeTab="soulmatch" />
     </div>
   );
 };
@@ -2947,7 +2914,6 @@ const FeedPage = () => {
         {currentUser?.id && <FeedComponent userId={null} isOwner={false} global={true} />}
       </div>
 
-      <AppBottomNav activeTab="feed" />
     </div>
   );
 };
@@ -3381,7 +3347,6 @@ const AmiciPage = () => {
         )}
       </div>
 
-      <AppBottomNav activeTab="soullink" />
     </div>
   );
 };
@@ -6308,8 +6273,6 @@ const ChatPage = () => {
         )}
       </div>
 
-      <AppBottomNav activeTab="chat" />
-
     </div>
   );
 };
@@ -6928,7 +6891,7 @@ const ProfilePage = () => {
         </AnimatePresence>
       </div>
 
-      <AppBottomNav activeTab="profile" />
+
 
       {/* ── LOGOUT MODAL ── */}
       <AnimatePresence>
@@ -7483,6 +7446,7 @@ export default function App() {
         <Route path="/faq" element={<FaqPage />} />
         <Route path="/dmca" element={<DmcaPage />} />
       </Routes>
+      <AppBottomNav />
     </Router>
   );
 }
