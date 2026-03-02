@@ -77,6 +77,7 @@ const AppBottomNav = () => {
   const navigate = useNavigate();
   const [pendingCount, setPendingCount] = useState(0);
   const [chatCount, setChatCount] = useState(0);
+  const [isNavExpanded, setIsNavExpanded] = useState(true);
 
   // Determina il tab attivo in base al percorso
   const getActiveTab = () => {
@@ -134,108 +135,248 @@ const AppBottomNav = () => {
   if (shouldHide) return null;
 
   return (
-    <div className="fixed bottom-6 left-0 right-0 z-[100] px-4 pointer-events-none">
+    <div className="fixed bottom-6 left-0 right-0 z-[100] px-4 pointer-events-none flex justify-center">
       <motion.div
-        initial={{ y: 100, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ type: 'spring', damping: 20, stiffness: 100 }}
-        className="max-w-md mx-auto bg-stone-900/90 backdrop-blur-2xl border border-white/10 shadow-[0_20px_40px_rgba(0,0,0,0.5)] rounded-[32px] p-2 flex items-center justify-between gap-1 pointer-events-auto"
+        drag="x"
+        dragConstraints={{ left: 0, right: 0 }}
+        dragElastic={0.1}
+        onDragEnd={(_, info) => {
+          if (info.offset.x > 80) setIsNavExpanded(false);
+          if (info.offset.x < -80) setIsNavExpanded(true);
+        }}
+        initial={false}
+        animate={{
+          x: isNavExpanded ? 0 : "38vw",
+          scale: isNavExpanded ? 1 : 0.9,
+          opacity: 1
+        }}
+        transition={{ type: 'spring', damping: 20, stiffness: 150 }}
+        className={cn(
+          "pointer-events-auto shadow-2xl flex items-center border border-white/10",
+          isNavExpanded
+            ? "w-full max-w-md bg-stone-900/95 backdrop-blur-2xl rounded-[40px] p-2 gap-1"
+            : "w-14 h-14 bg-stone-900 rounded-full cursor-pointer justify-center"
+        )}
       >
-        {/* Home */}
-        <Link to="/" className="relative flex-1 group">
-          <motion.div
-            whileTap={{ scale: 0.9 }}
-            className={cn(
-              "flex flex-col items-center py-2.5 rounded-2xl transition-all duration-300",
-              activeTab === 'home' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
-            )}
-          >
-            <Home className="w-5 h-5 mb-1" />
-            <span className="text-[7px] font-black uppercase tracking-wider">Home</span>
-          </motion.div>
-        </Link>
+        {!isNavExpanded ? (
+          <div onClick={() => setIsNavExpanded(true)} className="flex items-center justify-center text-white w-full h-full">
+            <Home className="w-6 h-6" />
+          </div>
+        ) : (
+          <>
+            {/* Home */}
+            <Link to="/" className="relative flex-1 group">
+              <motion.div
+                whileTap={{ scale: 0.9 }}
+                className={cn(
+                  "flex flex-col items-center py-2.5 rounded-full aspect-square justify-center transition-all duration-300",
+                  activeTab === 'home' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
+                )}
+              >
+                <Home className="w-5 h-5 mb-0.5" />
+                <span className="text-[6px] font-black uppercase tracking-wider">Home</span>
+              </motion.div>
+            </Link>
 
-        {/* Bacheca */}
-        <Link to="/bacheca" className="relative flex-1 group">
-          <motion.div
-            whileTap={{ scale: 0.9 }}
-            className={cn(
-              "flex flex-col items-center py-2.5 rounded-2xl transition-all duration-300",
-              activeTab === 'bacheca' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
-            )}
-          >
-            <Users className="w-5 h-5 mb-1" />
-            <span className="text-[7px] font-black uppercase tracking-wider">Bacheca</span>
-          </motion.div>
-        </Link>
+            {/* Bacheca */}
+            <Link to="/bacheca" className="relative flex-1 group">
+              <motion.div
+                whileTap={{ scale: 0.9 }}
+                className={cn(
+                  "flex flex-col items-center py-2.5 rounded-full aspect-square justify-center transition-all duration-300",
+                  activeTab === 'bacheca' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
+                )}
+              >
+                <Users className="w-5 h-5 mb-0.5" />
+                <span className="text-[6px] font-black uppercase tracking-wider">Bacheca</span>
+              </motion.div>
+            </Link>
 
-        {/* Amici (SoulLink) */}
-        <Link to="/amici" className="relative flex-1 group">
-          <motion.div
-            whileTap={{ scale: 0.9 }}
-            className={cn(
-              "flex flex-col items-center py-2.5 rounded-2xl transition-all duration-300",
-              activeTab === 'soullink' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
-            )}
-          >
-            <div className="relative">
-              <UserCheck className="w-5 h-5 mb-1" />
-              {pendingCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-500 text-white text-[7px] font-black rounded-full flex items-center justify-center border-2 border-stone-900 shadow-sm">{pendingCount}</span>
-              )}
-            </div>
-            <span className="text-[7px] font-black uppercase tracking-wider">Amici</span>
-          </motion.div>
-        </Link>
+            {/* Amici (SoulLink) */}
+            <Link to="/amici" className="relative flex-1 group">
+              <motion.div
+                whileTap={{ scale: 0.9 }}
+                className={cn(
+                  "flex flex-col items-center py-2.5 rounded-full aspect-square justify-center transition-all duration-300",
+                  activeTab === 'soullink' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
+                )}
+              >
+                <div className="relative">
+                  <UserCheck className="w-5 h-5 mb-0.5" />
+                  {pendingCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-500 text-white text-[7px] font-black rounded-full flex items-center justify-center border-2 border-stone-900 shadow-sm">{pendingCount}</span>
+                  )}
+                </div>
+                <span className="text-[6px] font-black uppercase tracking-wider">Amici</span>
+              </motion.div>
+            </Link>
 
-        {/* Chat */}
-        <Link to="/chat" className="relative flex-1 group">
-          <motion.div
-            whileTap={{ scale: 0.9 }}
-            className={cn(
-              "flex flex-col items-center py-2.5 rounded-2xl transition-all duration-300",
-              activeTab === 'chat' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
-            )}
-          >
-            <div className="relative">
-              <MessageCircle className="w-5 h-5 mb-1" />
-              {chatCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-500 text-white text-[7px] font-black rounded-full flex items-center justify-center border-2 border-stone-900 shadow-sm">{chatCount}</span>
-              )}
-            </div>
-            <span className="text-[7px] font-black uppercase tracking-wider">Chat</span>
-          </motion.div>
-        </Link>
+            {/* Chat */}
+            <Link to="/chat" className="relative flex-1 group">
+              <motion.div
+                whileTap={{ scale: 0.9 }}
+                className={cn(
+                  "flex flex-col items-center py-2.5 rounded-full aspect-square justify-center transition-all duration-300",
+                  activeTab === 'chat' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
+                )}
+              >
+                <div className="relative">
+                  <MessageCircle className="w-5 h-5 mb-0.5" />
+                  {chatCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-500 text-white text-[7px] font-black rounded-full flex items-center justify-center border-2 border-stone-900 shadow-sm">{chatCount}</span>
+                  )}
+                </div>
+                <span className="text-[6px] font-black uppercase tracking-wider">Chat</span>
+              </motion.div>
+            </Link>
 
-        {/* Feed */}
-        <Link to="/feed" className="relative flex-1 group">
-          <motion.div
-            whileTap={{ scale: 0.9 }}
-            className={cn(
-              "flex flex-col items-center py-2.5 rounded-2xl transition-all duration-300",
-              activeTab === 'feed' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
-            )}
-          >
-            <LayoutGrid className="w-5 h-5 mb-1" />
-            <span className="text-[7px] font-black uppercase tracking-wider">Feed</span>
-          </motion.div>
-        </Link>
+            {/* Feed */}
+            <Link to="/feed" className="relative flex-1 group">
+              <motion.div
+                whileTap={{ scale: 0.9 }}
+                className={cn(
+                  "flex flex-col items-center py-2.5 rounded-full aspect-square justify-center transition-all duration-300",
+                  activeTab === 'feed' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
+                )}
+              >
+                <LayoutGrid className="w-5 h-5 mb-0.5" />
+                <span className="text-[6px] font-black uppercase tracking-wider">Feed</span>
+              </motion.div>
+            </Link>
 
-        {/* SoulMatch (Heart Button) */}
-        <Link to="/soul-match" className="relative flex-1 group">
-          <motion.div
-            whileTap={{ scale: 0.9 }}
-            className={cn(
-              "flex flex-col items-center py-2.5 rounded-2xl transition-all duration-300",
-              activeTab === 'soulmatch' ? "bg-rose-600 text-white shadow-lg shadow-rose-500/40" : "text-stone-400 hover:text-white"
-            )}
-          >
-            <Heart className={cn("w-5 h-5 mb-1", activeTab === 'soulmatch' ? "fill-current" : "")} />
-            <span className="text-[7px] font-black uppercase tracking-wider">SoulMatch</span>
-          </motion.div>
-        </Link>
+            {/* SoulMatch (Heart Button) */}
+            <Link to="/soul-match" className="relative flex-1 group">
+              <motion.div
+                whileTap={{ scale: 0.9 }}
+                className={cn(
+                  "flex flex-col items-center py-2.5 rounded-full aspect-square justify-center transition-all duration-300",
+                  activeTab === 'soulmatch' ? "bg-rose-600 text-white shadow-lg shadow-rose-500/40" : "text-stone-400 hover:text-white"
+                )}
+              >
+                <Heart className={cn("w-5 h-5 mb-0.5", activeTab === 'soulmatch' ? "fill-current" : "")} />
+                <span className="text-[6px] font-black uppercase tracking-wider">Match</span>
+              </motion.div>
+            </Link>
+          </>
+        )}
       </motion.div>
     </div>
+  );
+};
+
+const GlobalFlashBanner = () => {
+  const [bannerMessages, setBannerMessages] = useState<any[]>([]);
+  const [bannerIndex, setBannerIndex] = useState(0);
+  const [isBannerExpanded, setIsBannerExpanded] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Hide on some pages
+  const hideOn = ['/live-chat', '/register', '/onboarding', '/edit-profile', '/admin'];
+  const shouldHide = hideOn.some(p => location.pathname.startsWith(p));
+
+  const fetchGlobalBanner = async () => {
+    try {
+      const { data } = await supabase.from('banner_messages').select('*').order('created_at', { ascending: false });
+      if (data && data.length > 0) setBannerMessages(data);
+    } catch (e) { }
+  };
+
+  useEffect(() => {
+    fetchGlobalBanner();
+    const interval = setInterval(fetchGlobalBanner, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (bannerMessages.length <= 1) return;
+    const interval = setInterval(() => {
+      setBannerIndex(Math.floor(Math.random() * bannerMessages.length));
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [bannerMessages]);
+
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent | TouchEvent) => {
+      const bannerEl = document.getElementById('msg-floating-banner');
+      if (isBannerExpanded && bannerEl && !bannerEl.contains(e.target as Node)) {
+        setIsBannerExpanded(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('touchstart', handleOutsideClick);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('touchstart', handleOutsideClick);
+    };
+  }, [isBannerExpanded]);
+
+  if (shouldHide || bannerMessages.length === 0) return null;
+
+  return (
+    <motion.div
+      id="msg-floating-banner"
+      drag="x"
+      dragConstraints={{ left: 0, right: 0 }}
+      dragElastic={0.1}
+      onDragEnd={(_, info) => {
+        if (info.offset.x > 50) setIsBannerExpanded(false);
+        if (info.offset.x < -50) setIsBannerExpanded(true);
+      }}
+      initial={false}
+      animate={{
+        x: isBannerExpanded ? 0 : 0,
+        scale: isBannerExpanded ? 1 : 0.9,
+        opacity: 1
+      }}
+      transition={{ type: 'spring', damping: 20, stiffness: 150 }}
+      className={cn(
+        "fixed z-[45] bottom-32 right-0 shadow-2xl flex items-center border border-white/20",
+        isBannerExpanded
+          ? "w-[94%] max-w-[360px] bg-rose-600 rounded-l-[32px] p-4 text-white"
+          : "w-14 h-14 bg-rose-600 rounded-full cursor-pointer justify-center"
+      )}
+    >
+      {!isBannerExpanded ? (
+        <div
+          onClick={(e) => { e.stopPropagation(); setIsBannerExpanded(true); }}
+          className="w-full h-full flex items-center justify-center text-white"
+        >
+          <Send className="w-6 h-6 rotate-[-45deg]" />
+        </div>
+      ) : (
+        <div className="w-full flex items-center justify-between gap-1 overflow-hidden">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={bannerMessages[bannerIndex]?.id || bannerIndex}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 10 }}
+              transition={{ duration: 0.3 }}
+              className="flex-1 flex items-center gap-2 pl-1 overflow-hidden cursor-pointer"
+              onClick={() => navigate(`/profile-detail/${bannerMessages[bannerIndex]?.user_id}`)}
+            >
+              <div className="w-[52px] h-[52px] rounded-[18px] p-[2px] bg-white/20 shrink-0 shadow-md">
+                <img src={bannerMessages[bannerIndex]?.photo_url || `https://picsum.photos/seed/${bannerMessages[bannerIndex]?.name}/100`} className="w-full h-full object-cover rounded-[16px]" />
+              </div>
+
+              <div className="flex flex-col flex-1 min-w-0 pr-1">
+                <div className="flex items-baseline gap-1.5 leading-tight mb-0.5">
+                  <span className="text-[11px] font-black text-white truncate">{bannerMessages[bannerIndex]?.name}</span>
+                  <span className="text-[9px] font-bold text-rose-200 capitalize shrink-0">{bannerMessages[bannerIndex]?.city}</span>
+                </div>
+
+                <div className="bg-white rounded-[10px] p-2 relative shadow-sm">
+                  <p className="text-[10px] text-stone-900 font-bold leading-[1.15] line-clamp-2 break-words">
+                    {bannerMessages[bannerIndex]?.message}
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      )}
+    </motion.div>
   );
 };
 
@@ -349,14 +490,14 @@ const Navbar = () => {
   }
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 px-6 py-4 flex justify-between items-center bg-white/80 backdrop-blur-md border-b border-stone-100">
+    <nav className="fixed top-0 left-0 right-0 z-50 px-6 py-3 flex justify-between items-center bg-stone-900/95 backdrop-blur-xl border-b border-white/10 shadow-lg">
       <Link to="/" className="flex items-center gap-3 group">
-        <div className="w-11 h-11 bg-rose-600 rounded-xl flex items-center justify-center group-hover:rotate-12 transition-transform shrink-0 shadow-lg shadow-rose-200">
-          <Heart className="text-white w-6 h-6 fill-current" />
+        <div className="w-10 h-10 bg-rose-600 rounded-full flex items-center justify-center group-hover:rotate-12 transition-transform shrink-0 shadow-lg shadow-rose-900/40">
+          <Heart className="text-white w-5 h-5 fill-current" />
         </div>
         <div className="flex flex-col">
-          <span className="text-2xl font-serif font-black tracking-tight text-stone-900 leading-none">SoulMatch</span>
-          <span className="text-[10px] font-montserrat font-bold text-rose-600 uppercase tracking-[0.15em] mt-1 line-clamp-1">
+          <span className="text-xl font-serif font-black tracking-tight text-white leading-none">SoulMatch</span>
+          <span className="text-[9px] font-montserrat font-bold text-rose-500 uppercase tracking-[0.2em] mt-1 line-clamp-1">
             {user ? user.name : "Compagnia Ideale"}
           </span>
         </div>
@@ -364,8 +505,8 @@ const Navbar = () => {
       <div className="flex gap-4 items-center">
         {user ? (
           <div className="flex items-center gap-3">
-            <Link to="/profile" className="w-11 h-11 rounded-full flex items-center justify-center border border-stone-100 bg-white shadow-sm transition-all hover:bg-stone-50 active:scale-95 overflow-hidden ring-2 ring-stone-50">
-              <ProfileAvatar user={user} className="w-full h-full" iconSize="w-6 h-6" />
+            <Link to="/profile" className="w-10 h-10 rounded-full flex items-center justify-center border border-white/10 bg-white/5 transition-all hover:bg-white/10 active:scale-95 overflow-hidden ring-2 ring-white/5">
+              <ProfileAvatar user={user} className="w-full h-full" iconSize="w-5 h-5" />
             </Link>
 
             <button
@@ -374,10 +515,10 @@ const Navbar = () => {
                 window.dispatchEvent(new Event('user-auth-change'));
                 window.location.href = '/';
               }}
-              className="w-11 h-11 bg-white text-stone-400 rounded-2xl flex items-center justify-center hover:bg-rose-50 hover:text-rose-600 transition-all border border-stone-100 active:scale-90 shadow-sm"
+              className="w-10 h-10 bg-white/5 text-stone-400 rounded-full flex items-center justify-center hover:bg-rose-600 hover:text-white transition-all border border-white/10 active:scale-90 shadow-sm"
               title="Esci"
             >
-              <LogOut className="w-5 h-5" />
+              <LogOut className="w-4 h-4" />
             </button>
           </div>
         ) : (
@@ -1838,9 +1979,6 @@ const BachecaPage = () => {
   const [showSoulMatch, setShowSoulMatch] = useState(false);
   const [soulmatchToast, setSoulmatchToast] = useState(false);
   const [selectedGenders, setSelectedGenders] = useState<string[]>([]);
-  const [bannerMessages, setBannerMessages] = useState<any[]>([]);
-  const [bannerIndex, setBannerIndex] = useState(0);
-  const [isBannerExpanded, setIsBannerExpanded] = useState(false);
 
   const SM_COOLDOWN_KEY = 'soulmatch_last_used';
   const COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24h
@@ -1932,45 +2070,11 @@ const BachecaPage = () => {
       navigate('/register');
     }
 
-    // Fetch da Supabase per compatibilita online e fallback API
-    const fetchGlobalBanner = async () => {
-      try {
-        const { data } = await supabase.from('banner_messages').select('*').order('created_at', { ascending: false });
-        if (data && data.length > 0) setBannerMessages(data);
-      } catch (e) {
-        // Fallback a null, il widget non appare
-      }
-    };
-    fetchGlobalBanner();
-
     // Save scroll position on unmount
     return () => {
       sessionStorage.setItem('bacheca_scroll', window.scrollY.toString());
     };
   }, []);
-
-  useEffect(() => {
-    if (bannerMessages.length <= 1) return;
-    const interval = setInterval(() => {
-      setBannerIndex(Math.floor(Math.random() * bannerMessages.length));
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [bannerMessages]);
-
-  useEffect(() => {
-    const handleOutsideClick = (e: MouseEvent | TouchEvent) => {
-      const bannerEl = document.getElementById('msg-floating-banner');
-      if (isBannerExpanded && bannerEl && !bannerEl.contains(e.target as Node)) {
-        setIsBannerExpanded(false);
-      }
-    };
-    document.addEventListener('mousedown', handleOutsideClick);
-    document.addEventListener('touchstart', handleOutsideClick);
-    return () => {
-      document.removeEventListener('mousedown', handleOutsideClick);
-      document.removeEventListener('touchstart', handleOutsideClick);
-    };
-  }, [isBannerExpanded]);
 
   // Restore scroll position after profiles are loaded
   useEffect(() => {
@@ -2342,69 +2446,6 @@ const BachecaPage = () => {
 
 
 
-      {/* ── NEW FLOATING MSG WIDGET ── */}
-      {bannerMessages.length > 0 && (
-        <div id="msg-floating-banner" className={cn(
-          "fixed z-[45] bottom-28 right-0 transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-2xl flex items-center border border-white/40",
-          isBannerExpanded
-            ? "w-[94%] max-w-[360px] bg-white/95 backdrop-blur-xl rounded-l-[32px] p-4"
-            : "w-14 h-14 bg-gradient-to-tr from-rose-500 to-rose-600 rounded-l-[24px] cursor-pointer"
-        )}>
-          {!isBannerExpanded ? (
-            <div
-              onClick={(e) => { e.stopPropagation(); navigate('/chat'); }}
-              onMouseEnter={() => setIsBannerExpanded(true)}
-              className="w-full h-full flex flex-col items-center justify-center text-white relative"
-            >
-              <span className="text-[9px] font-black tracking-widest leading-none">CHAT</span>
-            </div>
-          ) : (
-            <div className="w-full flex items-center justify-between gap-1 overflow-hidden">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={bannerMessages[bannerIndex]?.id || bannerIndex}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 10 }}
-                  transition={{ duration: 0.3 }}
-                  className="flex-1 flex items-center gap-2 pl-1 overflow-hidden"
-                >
-                  <div
-                    onClick={() => navigate(`/profile-detail/${bannerMessages[bannerIndex]?.user_id}`)}
-                    className="w-[52px] h-[52px] rounded-[18px] p-[2px] bg-gradient-to-tr from-amber-300 via-rose-500 to-fuchsia-600 cursor-pointer shadow-md active:scale-95 transition-transform shrink-0"
-                  >
-                    <div className="w-full h-full bg-white rounded-[16px] p-0.5">
-                      <img src={bannerMessages[bannerIndex]?.photo_url || `https://picsum.photos/seed/${bannerMessages[bannerIndex]?.name}/100`} className="w-full h-full object-cover rounded-[14px]" />
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col flex-1 min-w-0 pr-1 cursor-pointer" onClick={() => navigate(`/live-chat/${bannerMessages[bannerIndex]?.user_id}`)}>
-                    <div className="flex items-baseline gap-1.5 leading-tight mb-0.5">
-                      <span className="text-[11px] font-black text-stone-900 truncate">{bannerMessages[bannerIndex]?.name}</span>
-                      <span className="text-[9px] font-bold text-stone-400 capitalize shrink-0">{bannerMessages[bannerIndex]?.city}</span>
-                    </div>
-
-                    <div className="bg-stone-100 rounded-[10px] p-2 relative shadow-sm border border-stone-50">
-                      {/* Fumetto tail */}
-                      <div className="absolute top-[8px] -left-[4px] w-0 h-0 border-y-[4px] border-y-transparent border-r-[5px] border-r-stone-100" />
-                      <p className="text-[10px] text-stone-700 font-medium leading-[1.15] line-clamp-2 break-words">
-                        {bannerMessages[bannerIndex]?.message}
-                      </p>
-                    </div>
-                  </div>
-                </motion.div>
-              </AnimatePresence>
-
-              <button
-                onClick={() => navigate('/chat')}
-                className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-stone-400 hover:bg-rose-50 hover:text-rose-600 shrink-0 shadow-sm border border-stone-100 active:scale-90 ml-1"
-              >
-                <ChevronRight className="w-5 h-5 ml-0.5" />
-              </button>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* ── COOLDOWN TOAST ── */}
       <AnimatePresence>
@@ -6745,7 +6786,7 @@ const ProfilePage = () => {
             )}
           >
             {activeTab === tab.id && (
-              <motion.div layoutId="profileTabBg" className="absolute inset-0 bg-rose-50 rounded-[18px]" />
+              <motion.div layoutId="profileTabBg" className="absolute inset-x-2 inset-y-1 bg-rose-50 rounded-full" />
             )}
             <div className="relative z-10">
               <tab.icon className="w-5 h-5" />
@@ -7308,7 +7349,7 @@ export default function App() {
               window.dispatchEvent(new Event('user-auth-change'));
             } else {
               // Update status
-              await supabase.from('users').update({ is_online: true, last_seen: new Date().toISOString() }).eq('id', u.id);
+              await supabase.from('users').update({ is_online: true }).eq('id', u.id);
             }
           }
         } catch (e) {
@@ -7325,7 +7366,7 @@ export default function App() {
         try {
           const u = JSON.parse(saved);
           if (u?.id && document.visibilityState === 'visible') {
-            await supabase.from('users').update({ is_online: true, last_seen: new Date().toISOString() }).eq('id', u.id);
+            await supabase.from('users').update({ is_online: true }).eq('id', u.id);
           }
         } catch (e) { }
       }
@@ -7339,8 +7380,7 @@ export default function App() {
           if (u?.id) {
             const isVisible = document.visibilityState === 'visible';
             await supabase.from('users').update({
-              is_online: isVisible,
-              last_seen: new Date().toISOString()
+              is_online: isVisible
             }).eq('id', u.id);
           }
         } catch (e) { }
@@ -7446,6 +7486,7 @@ export default function App() {
         <Route path="/faq" element={<FaqPage />} />
         <Route path="/dmca" element={<DmcaPage />} />
       </Routes>
+      <GlobalFlashBanner />
       <AppBottomNav />
     </Router>
   );
