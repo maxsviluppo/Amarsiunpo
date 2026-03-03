@@ -83,22 +83,13 @@ const AppBottomNav = () => {
   const [lastScrollY, setLastScrollY] = useState(0);
 
   useEffect(() => {
-    let scrollDistance = 0;
     const handleScroll = () => {
       const currentScrollY = window.scrollY;
       const delta = currentScrollY - lastScrollY;
 
-      if (delta > 0 && currentScrollY > 400) {
-        scrollDistance += delta;
-        if (scrollDistance > 100) { // Richiede 100px di scroll continuo verso il basso
-          setIsNavVisible(false);
-        }
-      } else if (delta < -15) { // Mostra non appena si scorre verso l'alto
-        setIsNavVisible(true);
-        scrollDistance = 0;
+      if (delta > 0 && currentScrollY > 200) {
+        setIsNavVisible(false);
       }
-
-      if (delta < 0) scrollDistance = 0;
       setLastScrollY(currentScrollY);
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
@@ -207,7 +198,7 @@ const AppBottomNav = () => {
           borderRadius: isNavVisible ? "40px" : "32px",
           x: isNavVisible ? 0 : -140, // Trasla a sinistra
         }}
-        transition={{ type: 'spring', damping: 30, stiffness: 450, mass: 0.8 }}
+        transition={{ type: 'spring', damping: 30, stiffness: 600, mass: 0.6 }}
         className={cn(
           "pointer-events-auto shadow-2xl border border-white/10 bg-stone-900/95 backdrop-blur-2xl p-2 gap-1 overflow-hidden flex items-center justify-center",
           !isNavVisible && "cursor-pointer"
@@ -315,7 +306,7 @@ const AppBottomNav = () => {
               </Link>
 
               {/* SoulMatch (Heart Button) */}
-              <Link to="/soul-match" className="relative flex-1 group">
+              <Link to="/soul-match" onClick={() => window.dispatchEvent(new CustomEvent('reset-soulmatch'))} className="relative flex-1 group">
                 <motion.div
                   whileTap={{ scale: 0.9 }}
                   className={cn(
@@ -2626,9 +2617,27 @@ const BachecaPage = () => {
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/100 via-black/40 to-transparent" />
 
+                    {/* Quick Feeling Button */}
+                    <button
+                      onClick={async (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        await supabase.from('interactions').insert({
+                          from_user_id: currentUser?.id,
+                          to_user_id: profile.id,
+                          type: 'heart',
+                          metadata: { source: 'bacheca_quick' }
+                        });
+                        alert(`✨ Soul Feeling inviato a ${profile.name}!`);
+                      }}
+                      className="absolute top-4 right-4 z-30 p-2.5 bg-white/20 backdrop-blur-lg rounded-2xl text-white hover:text-rose-500 hover:bg-white transition-all shadow-lg active:scale-90"
+                    >
+                      <Heart className="w-5 h-5 fill-current" />
+                    </button>
+
                     {/* Match Score Badge (Permanent) - ONLY IF UNLOCKED */}
                     {currentUser && unlockedIds.includes(profile.id) && (
-                      <div className="absolute top-0 left-0 z-20 pointer-events-none drop-shadow-[0_4px_10px_rgba(225,29,72,0.4)]">
+                      <div className="absolute top-0 left-0 z-20 pointer-events-none drop-shadow-[0_4px_10px_rgba(225,29,72,0.4)] overflow-hidden rounded-tl-[28px]">
                         <svg width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-[88px] h-[88px]">
                           <path d="M 0 0 L 100 0 Q 15 15 0 100 Z" fill="#e11d48" />
                         </svg>
@@ -2872,6 +2881,7 @@ const SoulMatchPage = () => {
   const [targetUser, setTargetUser] = useState<UserProfile | null>(null);
   const [calculating, setCalculating] = useState(false);
   const [matchScore, setMatchScore] = useState<number | null>(null);
+  const [feelingSent, setFeelingSent] = useState(false);
 
   // Top 10 Discovery State
   const [showRankings, setShowRankings] = useState(false);
@@ -2880,6 +2890,12 @@ const SoulMatchPage = () => {
   useEffect(() => {
     const saved = localStorage.getItem('soulmatch_unlocked_ids');
     if (saved) setUnlockedIds(JSON.parse(saved));
+  }, []);
+
+  useEffect(() => {
+    const handleReset = () => setTargetUser(null);
+    window.addEventListener('reset-soulmatch', handleReset);
+    return () => window.removeEventListener('reset-soulmatch', handleReset);
   }, []);
 
   const unlockId = (id: string) => {
@@ -2950,6 +2966,7 @@ const SoulMatchPage = () => {
     setTargetUser(user);
     setCalculating(true);
     setMatchScore(null);
+    setFeelingSent(false);
     setShowRankings(false);
     setTimeout(() => {
       const score = calculateMatchScore(currentUser, user);
@@ -3052,9 +3069,27 @@ const SoulMatchPage = () => {
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-stone-900/95 via-stone-900/10 to-transparent opacity-90 transition-opacity" />
 
+                  {/* Quick Feeling Button */}
+                  <button
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      await supabase.from('interactions').insert({
+                        from_user_id: currentUser?.id,
+                        to_user_id: p.id,
+                        type: 'heart',
+                        metadata: { source: 'soulmatch_grid_quick' }
+                      });
+                      alert(`✨ Soul Feeling inviato a ${p.name}!`);
+                    }}
+                    className="absolute top-4 right-4 z-30 p-2.5 bg-white/20 backdrop-blur-lg rounded-2xl text-white hover:text-rose-500 hover:bg-white transition-all shadow-lg active:scale-90"
+                  >
+                    <Heart className="w-5 h-5 fill-current" />
+                  </button>
+
                   {/* Match Score Badge (Permanent) - ONLY IF UNLOCKED */}
                   {currentUser && unlockedIds.includes(p.id) && (
-                    <div className="absolute top-0 left-0 z-20 pointer-events-none drop-shadow-[0_4px_10px_rgba(225,29,72,0.4)]">
+                    <div className="absolute top-0 left-0 z-20 pointer-events-none drop-shadow-[0_4px_10px_rgba(225,29,72,0.4)] overflow-hidden rounded-tl-[32px]">
                       <svg width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-[88px] h-[88px]">
                         <path d="M 0 0 L 100 0 Q 15 15 0 100 Z" fill="#e11d48" />
                       </svg>
@@ -3115,153 +3150,146 @@ const SoulMatchPage = () => {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="fixed inset-0 z-[200] bg-white flex flex-col items-center justify-between py-6 px-6 overflow-y-auto"
+            className="fixed inset-0 z-[40] bg-white flex flex-col items-center justify-center pt-24 pb-12 px-6 overflow-y-auto"
           >
-            {/* Header */}
-            <div className="w-full flex items-center justify-between shrink-0">
-              <button
-                onClick={() => setTargetUser(null)}
-                className="w-10 h-10 bg-stone-50 rounded-full flex items-center justify-center text-stone-400 border border-stone-100"
-              >
-                <X className="w-5 h-5" />
-              </button>
-              <div className="flex flex-col items-center">
-                <h2 className="text-lg font-serif font-black text-[#2E1139]">Analisi SoulMatch</h2>
-                <span className="text-[7px] font-black text-rose-500 uppercase tracking-[0.3em]">Sincronizzazione Perfetta</span>
-              </div>
-              <div className="w-10" />
-            </div>
-
             {/* Main Content Area */}
-            <div className="flex-1 flex flex-col items-center justify-center w-full space-y-6 py-4">
-              <div className="text-center space-y-1">
-                <h1 className="text-2xl font-serif font-black text-[#2E1139]">Trova la tua anima gemella</h1>
-                <p className="text-stone-400 text-[10px] font-medium max-w-[200px] mx-auto">Calcoliamo l'affinità energetica per una connessione perfetta.</p>
-              </div>
-
-              {/* DYNAMIC AVATAR COMPOSITION (COMPACT SIZE) */}
-              <div className="relative w-64 h-64 flex items-center justify-center">
-                {/* AVATAR TOP LEFT */}
+            <div className="flex-1 flex flex-col items-center justify-center w-full space-y-16 py-4">
+              {/* DYNAMIC AVATAR COMPOSITION - Larger and Distanced */}
+              <div className="relative w-84 h-84 flex items-center justify-center">
                 <motion.div
-                  animate={{
-                    y: [0, -10, 0],
-                    scale: [1, 1.05, 1],
-                    rotate: [-8, -6, -8]
-                  }}
-                  transition={{
-                    repeat: Infinity,
-                    duration: 4,
-                    ease: "easeInOut"
-                  }}
-                  className="absolute top-0 left-0 w-44 h-44 border-[8px] border-white shadow-xl overflow-hidden z-10 bg-rose-50"
-                  style={{
-                    borderRadius: "38% 62% 63% 37% / 41% 44% 56% 59%" // Irregular border/blob
-                  }}
+                  animate={{ y: [0, -10, 0], rotate: [-8, -6, -8] }}
+                  transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
+                  className="absolute top-0 left-0 w-52 h-52 border-[10px] border-white shadow-2xl overflow-hidden z-10 bg-rose-50"
+                  style={{ borderRadius: "38% 62% 63% 37% / 41% 44% 56% 59%" }}
                 >
                   <img src={currentUser?.photos?.[0] || currentUser?.photo_url || `https://picsum.photos/seed/me/400`} className="w-full h-full object-cover" />
                 </motion.div>
 
-                {/* AVATAR BOTTOM RIGHT */}
                 <motion.div
-                  animate={{
-                    y: [0, 10, 0],
-                    scale: [1, 1.05, 1],
-                    rotate: [8, 10, 8]
-                  }}
-                  transition={{
-                    repeat: Infinity,
-                    duration: 4,
-                    ease: "easeInOut",
-                    delay: 0.5
-                  }}
-                  className="absolute bottom-0 right-0 w-44 h-44 border-[8px] border-white shadow-xl overflow-hidden z-10 bg-purple-50"
-                  style={{
-                    borderRadius: "62% 38% 37% 63% / 59% 56% 44% 41%" // Irregular border/blob
-                  }}
+                  animate={{ y: [0, 10, 0], rotate: [8, 10, 8] }}
+                  transition={{ repeat: Infinity, duration: 4, ease: "easeInOut", delay: 0.5 }}
+                  className="absolute bottom-0 right-0 w-52 h-52 border-[10px] border-white shadow-2xl overflow-hidden z-10 bg-purple-50"
+                  style={{ borderRadius: "62% 38% 37% 63% / 59% 56% 44% 41%" }}
                 >
                   <img src={targetUser.photos?.[0] || targetUser.photo_url || `https://picsum.photos/seed/${targetUser.name}/400`} className="w-full h-full object-cover" />
                 </motion.div>
 
-                {/* MATCH HEART BADGE (Center Score) */}
+                {/* MATCH HEART (Visual indicator only) */}
                 <motion.div
                   initial={{ scale: 0, opacity: 0 }}
-                  animate={{
-                    scale: matchScore !== null ? [1, 1.1, 1] : 0,
-                    opacity: matchScore !== null ? 1 : 0
-                  }}
-                  transition={{
-                    scale: { repeat: Infinity, duration: 1.5 },
-                    opacity: { duration: 0.5 }
-                  }}
-                  className="absolute z-20 w-32 h-32 flex items-center justify-center"
+                  animate={{ scale: matchScore !== null ? [1, 1.15, 1] : 0, opacity: matchScore !== null ? 1 : 0 }}
+                  transition={{ scale: { repeat: Infinity, duration: 2 }, opacity: { duration: 0.5 } }}
+                  className="absolute z-20 w-32 h-32 flex flex-col items-center justify-center pointer-events-none"
                 >
-                  <Heart className="w-full h-full text-rose-600 fill-current drop-shadow-[0_0_20px_rgba(225,29,72,0.5)]" />
-                  <div className="absolute inset-0 flex flex-col items-center justify-center text-white pb-2">
-                    <span className="text-xl font-black tracking-tighter leading-none">{matchScore}%</span>
-                    <span className="text-[8px] font-black uppercase tracking-[0.2em] opacity-80 mt-1">Match</span>
+                  <Heart className="w-full h-full text-rose-600 fill-current drop-shadow-[0_0_40px_rgba(225,29,72,0.7)]" />
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-white pb-3">
+                    <span className="text-xl font-black tracking-tighter drop-shadow-lg">{matchScore}%</span>
+                    <span className="text-[7px] font-bold uppercase tracking-[0.2em] opacity-80">Match</span>
                   </div>
                 </motion.div>
               </div>
 
-              {/* Match Feedback or Loading */}
-              <div className="w-full max-w-xs text-center min-h-[50px]">
+              {/* Feedback Area - wider container for longer lines, non-bold */}
+              <div className="w-full max-w-md text-center min-h-[90px]">
                 {calculating ? (
-                  <div className="space-y-3">
-                    <div className="flex justify-center space-x-2">
-                      {[0, 1, 2].map(i => (
-                        <motion.div key={i} animate={{ scale: [1, 1.3, 1], opacity: [0.3, 1, 0.3] }} transition={{ repeat: Infinity, duration: 1, delay: i * 0.2 }} className="w-2 h-2 bg-rose-500 rounded-full" />
-                      ))}
-                    </div>
-                    <p className="text-[9px] font-black text-[#2E1139] uppercase tracking-[0.4em] animate-pulse">Sincronizzazione in corso</p>
-                  </div>
+                  <p className="text-[9px] font-black text-[#2E1139] uppercase tracking-[0.4em] animate-pulse">Sincronizzazione Anime...</p>
                 ) : matchScore !== null && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="space-y-2"
-                  >
-                    <p className="text-[#2E1139] text-xs font-black italic px-4">
-                      {matchScore >= 80 ? '"Una sintonia rara e profonda."' :
-                        matchScore >= 50 ? '"Ottime basi per connettersi."' :
-                          '"Differenze interessanti da esplorare."'}
-                    </p>
-                  </motion.div>
+                  <p className="text-[#2E1139] text-[15px] italic leading-relaxed px-4">
+                    {matchScore >= 80 ? '"Sintonia rara: le vostre anime vibrano all\'unisono verso l\'infinito."' :
+                      matchScore >= 50 ? '"Grande potenziale: le vostre differenze completano un puzzle affascinante."' :
+                        '"Contrasti intriganti: lasciatevi sorprendere da una nuova prospettiva."'}
+                  </p>
                 )}
               </div>
             </div>
 
-            {/* Action Buttons */}
-            <div className="w-full space-y-3 shrink-0">
-              <div className="flex gap-2">
-                <button
-                  onClick={() => navigate(`/profile-detail/${targetUser.id}`)}
-                  className="flex-1 h-14 bg-[#2E1139] text-white rounded-[24px] text-xs font-black uppercase tracking-[0.2em] shadow-lg active:scale-95 transition-all"
-                >
-                  Profilo
-                </button>
-                <button
-                  onClick={async () => {
+            {/* FLOATING HEART ANIMATION (RISING BALLOON) */}
+            <AnimatePresence>
+              {matchScore && !calculating && !feelingSent && (
+                <motion.div
+                  initial={{ top: "100vh", opacity: 0, x: 0 }}
+                  animate={{
+                    top: 120,
+                    opacity: 1,
+                    x: [0, 20, -20, 0] // Balloon swaying
+                  }}
+                  exit={{ opacity: 0, scale: 2 }}
+                  transition={{
+                    top: { duration: 7, ease: "linear" },
+                    opacity: { duration: 1 },
+                    x: { duration: 3, repeat: Infinity, ease: "easeInOut" }
+                  }}
+                  className="fixed right-32 z-[100] cursor-pointer"
+                  onClick={async (e) => {
+                    e.stopPropagation();
                     await supabase.from('interactions').insert({
                       from_user_id: currentUser?.id,
                       to_user_id: targetUser.id,
-                      type: 'heart', // Using heart as a 'match notification'
-                      metadata: { match_score: matchScore, source: 'soulmatch' }
+                      type: 'heart',
+                      metadata: { match_score: matchScore, source: 'soulmatch_floating' }
                     });
-                    alert(`Match del ${matchScore}% inviato a ${targetUser.name}!`);
+                    setFeelingSent(true);
+                    alert(`✨ Soul Feeling inviato a ${targetUser.name}!`);
                   }}
-                  className="w-14 h-14 bg-rose-600 text-white rounded-[24px] flex items-center justify-center shadow-lg shadow-rose-500/30 active:scale-95 transition-all"
-                  title="Invia Match"
                 >
-                  <Send className="w-5 h-5" />
-                </button>
-              </div>
-              <button
-                onClick={() => setTargetUser(null)}
-                className="w-full h-12 bg-rose-50 text-rose-600 rounded-[24px] text-[10px] font-black uppercase tracking-[0.2em] active:scale-95 transition-all"
-              >
-                Torna alla Bacheca
-              </button>
-            </div>
+                  <div className="relative flex items-center justify-center group">
+                    {/* Companion Hearts */}
+                    <motion.div
+                      animate={{ x: [0, -15, 15, 0], y: [0, -20, 20, 0] }}
+                      transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                      className="absolute -top-6 -left-10 text-rose-300 opacity-60"
+                    >
+                      <Heart className="w-5 h-5 fill-current" />
+                    </motion.div>
+                    <motion.div
+                      animate={{ x: [0, 20, -20, 0], y: [0, 25, -25, 0] }}
+                      transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
+                      className="absolute -bottom-4 -right-12 text-rose-300 opacity-50"
+                    >
+                      <Heart className="w-4 h-4 fill-current" />
+                    </motion.div>
+                    <motion.div
+                      animate={{ x: [0, -10, 10, 0], y: [0, 30, -30, 0] }}
+                      transition={{ duration: 3, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+                      className="absolute top-8 -right-14 text-rose-200 opacity-40"
+                    >
+                      <Heart className="w-6 h-6 fill-current" />
+                    </motion.div>
+                    <motion.div
+                      animate={{ x: [0, 15, -15, 0], y: [-10, 20, -10, -10] }}
+                      transition={{ duration: 6, repeat: Infinity, ease: "easeInOut", delay: 0.2 }}
+                      className="absolute -top-12 right-2 text-rose-100 opacity-70"
+                    >
+                      <Heart className="w-3 h-3 fill-current" />
+                    </motion.div>
+                    <motion.div
+                      animate={{ x: [-20, 20, -20], y: [0, -30, 0] }}
+                      transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut", delay: 0.8 }}
+                      className="absolute bottom-8 -left-16 text-rose-200 opacity-60"
+                    >
+                      <Heart className="w-5 h-5 fill-current" />
+                    </motion.div>
+                    <motion.div
+                      animate={{ scale: [1, 1.2, 1], x: [0, -10, 10, 0] }}
+                      transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
+                      className="absolute -bottom-12 -left-4 text-rose-400 opacity-30"
+                    >
+                      <Heart className="w-7 h-7 fill-current" />
+                    </motion.div>
+                    <motion.div
+                      animate={{ rotate: [0, 45, -45, 0], y: [0, 15, -15, 0] }}
+                      transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                      className="absolute top-12 left-10 text-rose-50 opacity-80 shadow-sm"
+                    >
+                      <Heart className="w-2 h-2 fill-current" />
+                    </motion.div>
+
+                    <Heart className="w-20 h-20 text-rose-400 fill-current drop-shadow-[0_10px_40px_rgba(251,113,133,0.6)] group-hover:scale-110 transition-transform" />
+                    <Send className="absolute w-7 h-7 text-white rotate-[-25deg] group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
         )}
 
@@ -3375,7 +3403,7 @@ const SoulMatchPage = () => {
           </div>
         )}
       </div>
-    </div>
+    </div >
   );
 };
 
@@ -6537,7 +6565,7 @@ const EditProfilePage = () => {
     }
   };
 
-  if (loading || !user) return <div className="min-h-screen flex items-center justify-center bg-stone-50"><Sparkles className="animate-spin text-rose-500" /></div>;
+  if (loading || !user) return <div className="min-h-screen flex items-center justify-center bg-stone-50"><motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ repeat: Infinity, duration: 1.5 }}><Heart className="w-12 h-12 text-rose-600 fill-current drop-shadow-xl" /></motion.div></div>;
 
   // remove old inline component definitions — now at module scope
 
@@ -7035,7 +7063,7 @@ const ChatPage = () => {
   };
 
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-stone-50"><Sparkles className="w-8 h-8 text-rose-600 animate-pulse" /></div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-stone-50"><motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ repeat: Infinity, duration: 1.5 }}><Heart className="w-12 h-12 text-rose-600 fill-current drop-shadow-xl" /></motion.div></div>;
   if (!user) return null;
 
   return (
@@ -7911,7 +7939,7 @@ const ProfilePage = () => {
 
   if (loading) return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-stone-50 gap-4">
-      <div className="w-12 h-12 border-4 border-rose-600 border-t-transparent rounded-full animate-spin" />
+      <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ repeat: Infinity, duration: 1.5 }}><Heart className="w-12 h-12 text-rose-600 fill-current drop-shadow-xl" /></motion.div>
       <p className="text-stone-400 text-sm font-medium animate-pulse">Caricamento profilo...</p>
     </div>
   );
