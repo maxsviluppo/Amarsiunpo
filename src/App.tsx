@@ -78,48 +78,37 @@ const AppBottomNav = () => {
   const navigate = useNavigate();
   const [pendingCount, setPendingCount] = useState(0);
   const [chatCount, setChatCount] = useState(0);
-  const [isNavExpanded, setIsNavExpanded] = useState(true);
-  const scrollTimeout = React.useRef<NodeJS.Timeout | null>(null);
+  // Auto-collapse feature disabled per user request
+  const isNavExpanded = true;
 
-  useEffect(() => {
-    const isScrollPage = location.pathname.startsWith('/feed') || location.pathname.startsWith('/bacheca') || location.pathname.startsWith('/amici') || location.pathname.startsWith('/live-chat');
-    if (!isScrollPage) {
-      setIsNavExpanded(true);
-      return;
-    }
+  const fetchPending = async () => {
+    let currentUserId: string | null = null;
+    try {
+      const saved = localStorage.getItem('soulmatch_user');
+      if (saved) {
+        const user = JSON.parse(saved);
+        currentUserId = user.id;
+      }
+    } catch (e) { }
 
-    const handleScroll = () => {
-      // Start collapsing when scrolling
-      if (isNavExpanded) setIsNavExpanded(false);
+    if (!currentUserId) return;
 
-      if (scrollTimeout.current) clearTimeout(scrollTimeout.current);
-      scrollTimeout.current = setTimeout(() => {
-        setIsNavExpanded(true);
-      }, 2000); // Re-expand after 2 seconds of no scroll
-    };
+    try {
+      const { count: friendsCount } = await supabase
+        .from('soul_links')
+        .select('*', { count: 'exact', head: true })
+        .eq('receiver_id', currentUserId)
+        .eq('status', 'pending');
+      setPendingCount(friendsCount || 0);
 
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => {
-      window.removeEventListener('scroll', handleScroll);
-      if (scrollTimeout.current) clearTimeout(scrollTimeout.current);
-    };
-  }, [location.pathname, isNavExpanded]);
-
-  // Determina il tab attivo in base al percorso
-  const getActiveTab = () => {
-    const path = location.pathname;
-    if (path === '/') return 'home';
-    if (path.startsWith('/bacheca')) return 'bacheca';
-    if (path.startsWith('/amici')) return 'soullink';
-    if (path.startsWith('/chat')) return 'chat';
-    if (path.startsWith('/feed')) return 'feed';
-    if (path.startsWith('/soul-match')) return 'soulmatch';
-    return '';
+      const { count: msgsCount } = await supabase
+        .from('chat_requests')
+        .select('*', { count: 'exact', head: true })
+        .eq('to_user_id', currentUserId)
+        .eq('status', 'pending');
+      setChatCount(msgsCount || 0);
+    } catch (e) { }
   };
-
-  const activeTab = getActiveTab();
-  const hideOn = ['/register', '/onboarding', '/edit-profile', '/admin'];
-  const shouldHide = hideOn.some(p => location.pathname.startsWith(p));
 
   useEffect(() => {
     let currentUserId: string | null = null;
@@ -132,24 +121,6 @@ const AppBottomNav = () => {
     } catch (e) { }
 
     if (!currentUserId) return;
-
-    const fetchPending = async () => {
-      try {
-        const { count: friendsCount } = await supabase
-          .from('soul_links')
-          .select('*', { count: 'exact', head: true })
-          .eq('receiver_id', currentUserId)
-          .eq('status', 'pending');
-        setPendingCount(friendsCount || 0);
-
-        const { count: msgsCount } = await supabase
-          .from('chat_requests')
-          .select('*', { count: 'exact', head: true })
-          .eq('to_user_id', currentUserId)
-          .eq('status', 'pending');
-        setChatCount(msgsCount || 0);
-      } catch (e) { }
-    };
 
     fetchPending();
 
@@ -182,149 +153,130 @@ const AppBottomNav = () => {
     };
   }, [location.pathname]); // Re-run when path changes to catch login/logout
 
+  // Determina il tab attivo in base al percorso
+  const getActiveTab = () => {
+    const path = location.pathname;
+    if (path === '/') return 'home';
+    if (path.startsWith('/bacheca')) return 'bacheca';
+    if (path.startsWith('/amici')) return 'soullink';
+    if (path.startsWith('/chat')) return 'chat';
+    if (path.startsWith('/feed')) return 'feed';
+    if (path.startsWith('/soul-match')) return 'soulmatch';
+    return '';
+  };
+
+  const activeTab = getActiveTab();
+  const hideOn = ['/live-chat', '/register', '/onboarding', '/edit-profile', '/admin'];
+  const shouldHide = hideOn.some(p => location.pathname.startsWith(p));
+
   if (shouldHide) return null;
 
   return (
     <div className="fixed bottom-8 left-0 right-0 z-[100] px-4 pointer-events-none flex justify-center">
-      <motion.div
-        drag="x"
-        dragConstraints={{ left: 0, right: 0 }}
-        dragElastic={0.1}
-        onDragEnd={(_, info) => {
-          if (info.offset.x > 80) setIsNavExpanded(false);
-          if (info.offset.x < -80) setIsNavExpanded(true);
-        }}
-        initial={false}
-        animate={{
-          x: isNavExpanded ? 0 : -160,
-          scale: 1,
-          opacity: 1
-        }}
-        transition={{
-          duration: 0.2 // Quick static transition
-        }}
-        className={cn(
-          "pointer-events-auto shadow-2xl flex items-center border border-white/10 transition-all duration-500",
-          isNavExpanded ? "z-[110]" : "z-[100]",
-          isNavExpanded
-            ? "w-full max-w-md bg-stone-900/95 backdrop-blur-2xl rounded-[40px] p-2 gap-1"
-            : "w-14 h-14 bg-stone-900 rounded-full cursor-pointer justify-center"
-        )}
+      <div
+        className="pointer-events-auto shadow-2xl flex items-center border border-white/10 transition-all duration-500 w-full max-w-md bg-stone-900/95 backdrop-blur-2xl rounded-[40px] p-2 gap-1"
       >
-        {!isNavExpanded ? (
-          <div onClick={() => setIsNavExpanded(true)} className="flex items-center justify-center text-white w-full h-full relative">
-            <Home className="w-6 h-6" />
-            {(pendingCount + chatCount) > 0 && (
-              <span className="absolute top-1 right-1 w-4 h-4 bg-rose-500 text-white text-[8px] font-black rounded-full flex items-center justify-center border-2 border-stone-900 shadow-sm animate-pulse">
-                {pendingCount + chatCount}
-              </span>
+        {/* Home */}
+        <Link to="/" className="relative flex-1 group">
+          <motion.div
+            whileTap={{ scale: 0.9 }}
+            className={cn(
+              "flex flex-col items-center py-2.5 rounded-full aspect-square justify-center transition-all duration-300",
+              activeTab === 'home' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
             )}
-          </div>
-        ) : (
-          <>
-            {/* Home */}
-            <Link to="/" className="relative flex-1 group">
-              <motion.div
-                whileTap={{ scale: 0.9 }}
-                className={cn(
-                  "flex flex-col items-center py-2.5 rounded-full aspect-square justify-center transition-all duration-300",
-                  activeTab === 'home' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
-                )}
-              >
-                <Home className="w-5 h-5 mb-0.5" />
-                <span className="text-[6px] font-black uppercase tracking-wider">Home</span>
-              </motion.div>
-            </Link>
+          >
+            <Home className="w-5 h-5 mb-0.5" />
+            <span className="text-[6px] font-black uppercase tracking-wider">Home</span>
+          </motion.div>
+        </Link>
 
-            {/* Bacheca */}
-            <Link to="/bacheca" className="relative flex-1 group">
-              <motion.div
-                whileTap={{ scale: 0.9 }}
-                className={cn(
-                  "flex flex-col items-center py-2.5 rounded-full aspect-square justify-center transition-all duration-300",
-                  activeTab === 'bacheca' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
-                )}
-              >
-                <Users className="w-5 h-5 mb-0.5" />
-                <span className="text-[6px] font-black uppercase tracking-wider">Bacheca</span>
-              </motion.div>
-            </Link>
+        {/* Bacheca */}
+        <Link to="/bacheca" className="relative flex-1 group">
+          <motion.div
+            whileTap={{ scale: 0.9 }}
+            className={cn(
+              "flex flex-col items-center py-2.5 rounded-full aspect-square justify-center transition-all duration-300",
+              activeTab === 'bacheca' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
+            )}
+          >
+            <Users className="w-5 h-5 mb-0.5" />
+            <span className="text-[6px] font-black uppercase tracking-wider">Bacheca</span>
+          </motion.div>
+        </Link>
 
-            {/* Feed */}
-            <Link to="/feed" className="relative flex-1 group">
-              <motion.div
-                whileTap={{ scale: 0.9 }}
-                className={cn(
-                  "flex flex-col items-center py-2.5 rounded-full aspect-square justify-center transition-all duration-300",
-                  activeTab === 'feed' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
-                )}
-              >
-                <LayoutGrid className="w-5 h-5 mb-0.5" />
-                <span className="text-[6px] font-black uppercase tracking-wider">Feed</span>
-              </motion.div>
-            </Link>
+        {/* Feed */}
+        <Link to="/feed" className="relative flex-1 group">
+          <motion.div
+            whileTap={{ scale: 0.9 }}
+            className={cn(
+              "flex flex-col items-center py-2.5 rounded-full aspect-square justify-center transition-all duration-300",
+              activeTab === 'feed' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
+            )}
+          >
+            <LayoutGrid className="w-5 h-5 mb-0.5" />
+            <span className="text-[6px] font-black uppercase tracking-wider">Feed</span>
+          </motion.div>
+        </Link>
 
-            {/* Amici (SoulLink) */}
-            <Link to="/amici" className="relative flex-1 group">
-              <motion.div
-                whileTap={{ scale: 0.9 }}
-                className={cn(
-                  "flex flex-col items-center py-2.5 rounded-full aspect-square justify-center transition-all duration-300",
-                  activeTab === 'soullink' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
-                )}
-              >
-                <div className="relative">
-                  <UserCheck className="w-5 h-5 mb-0.5" />
-                  {pendingCount > 0 && (
-                    <>
-                      <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-500 rounded-full animate-ping opacity-75" />
-                      <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-500 text-white text-[7px] font-black rounded-full flex items-center justify-center border-2 border-stone-900 shadow-sm z-10">{pendingCount}</span>
-                    </>
-                  )}
-                </div>
-                <span className="text-[6px] font-black uppercase tracking-wider">Amici</span>
-              </motion.div>
-            </Link>
+        {/* Amici (SoulLink) */}
+        <Link to="/amici" className="relative flex-1 group">
+          <motion.div
+            whileTap={{ scale: 0.9 }}
+            className={cn(
+              "flex flex-col items-center py-2.5 rounded-full aspect-square justify-center transition-all duration-300",
+              activeTab === 'soullink' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
+            )}
+          >
+            <div className="relative">
+              <UserCheck className="w-5 h-5 mb-0.5" />
+              {pendingCount > 0 && (
+                <>
+                  <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-500 rounded-full animate-ping opacity-75" />
+                  <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-500 text-white text-[7px] font-black rounded-full flex items-center justify-center border-2 border-stone-900 shadow-sm z-10">{pendingCount}</span>
+                </>
+              )}
+            </div>
+            <span className="text-[6px] font-black uppercase tracking-wider">Amici</span>
+          </motion.div>
+        </Link>
 
-            {/* Chat */}
-            <Link to="/chat" className="relative flex-1 group">
-              <motion.div
-                whileTap={{ scale: 0.9 }}
-                className={cn(
-                  "flex flex-col items-center py-2.5 rounded-full aspect-square justify-center transition-all duration-300",
-                  activeTab === 'chat' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
-                )}
-              >
-                <div className="relative" id="nav-chat-icon">
-                  <MessageCircle className="w-5 h-5 mb-0.5" />
-                  {chatCount > 0 && (
-                    <>
-                      <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-500 rounded-full animate-ping opacity-75" />
-                      <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-500 text-white text-[7px] font-black rounded-full flex items-center justify-center border-2 border-stone-900 shadow-sm z-10">{chatCount}</span>
-                    </>
-                  )}
-                </div>
-                <span className="text-[6px] font-black uppercase tracking-wider">Chat</span>
-              </motion.div>
-            </Link>
+        {/* Chat */}
+        <Link to="/chat" className="relative flex-1 group">
+          <motion.div
+            whileTap={{ scale: 0.9 }}
+            className={cn(
+              "flex flex-col items-center py-2.5 rounded-full aspect-square justify-center transition-all duration-300",
+              activeTab === 'chat' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
+            )}
+          >
+            <div className="relative" id="nav-chat-icon">
+              <MessageCircle className="w-5 h-5 mb-0.5" />
+              {chatCount > 0 && (
+                <>
+                  <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-500 rounded-full animate-ping opacity-75" />
+                  <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-500 text-white text-[7px] font-black rounded-full flex items-center justify-center border-2 border-stone-900 shadow-sm z-10">{chatCount}</span>
+                </>
+              )}
+            </div>
+            <span className="text-[6px] font-black uppercase tracking-wider">Chat</span>
+          </motion.div>
+        </Link>
 
-            {/* SoulMatch (Heart Button) */}
-            <Link to="/soul-match" className="relative flex-1 group">
-              <motion.div
-                whileTap={{ scale: 0.9 }}
-                className={cn(
-                  "flex flex-col items-center py-2.5 rounded-full aspect-square justify-center transition-all duration-300",
-                  activeTab === 'soulmatch' ? "bg-rose-600 text-white shadow-lg shadow-rose-500/40" : "text-stone-400 hover:text-white"
-                )}
-              >
-                <Heart className={cn("w-5 h-5 mb-0.5", activeTab === 'soulmatch' ? "fill-current" : "")} />
-                <span className="text-[6px] font-black uppercase tracking-wider">Match</span>
-              </motion.div>
-            </Link>
-          </>
-        )}
-      </motion.div>
-    </div >
+        {/* SoulMatch (Heart Button) */}
+        <Link to="/soul-match" className="relative flex-1 group">
+          <motion.div
+            whileTap={{ scale: 0.9 }}
+            className={cn(
+              "flex flex-col items-center py-2.5 rounded-full aspect-square justify-center transition-all duration-300",
+              activeTab === 'soulmatch' ? "bg-rose-600 text-white shadow-lg shadow-rose-500/40" : "text-stone-400 hover:text-white"
+            )}
+          >
+            <Heart className={cn("w-5 h-5 mb-0.5", activeTab === 'soulmatch' ? "fill-current" : "")} />
+            <span className="text-[6px] font-black uppercase tracking-wider">Match</span>
+          </motion.div>
+        </Link>
+      </div>
+    </div>
   );
 };
 
@@ -1327,9 +1279,9 @@ const LiveChatPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-stone-50 flex flex-col pb-48 relative">
+    <div className="min-h-screen bg-stone-50 flex flex-col pt-20 pb-40 relative">
       {/* Header */}
-      <div className="sticky top-0 flex items-center gap-2 p-3 border-b border-stone-100 shadow-sm z-50 bg-white/95 backdrop-blur-md">
+      <div className="sticky top-[64px] flex items-center gap-2 p-3 border-b border-stone-100 shadow-sm z-50 bg-white/95 backdrop-blur-md">
         <button onClick={handleClose} className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-stone-50 transition-colors shrink-0">
           <ChevronRight className="w-6 h-6 rotate-180 text-stone-600" />
         </button>
@@ -1408,33 +1360,36 @@ const LiveChatPage = () => {
         <div ref={messagesEndRef} className="pb-4" />
       </div>
 
-      {/* Input Layer */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-stone-100 shadow-[0_-4px_20px_-5px_rgba(0,0,0,0.05)] pb-safe z-[60]">
-        <div className="flex gap-2 items-end max-w-lg mx-auto">
-          <textarea
-            value={text}
-            onChange={e => setText(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSend();
-              }
-            }}
-            onInput={(e) => {
-              const target = e.target as HTMLTextAreaElement;
-              target.style.height = 'auto';
-              target.style.height = `${Math.min(128, target.scrollHeight)}px`;
-            }}
-            className="flex-1 bg-stone-50 border border-stone-200 rounded-[22px] p-4 text-[14px] font-medium resize-none focus:outline-none focus:ring-2 focus:ring-rose-200 shadow-inner min-h-[56px] max-h-32"
-            rows={1}
-            placeholder="Scrivi un messaggio..."
-          />
+      {/* Floating Input Layer */}
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-full max-w-lg px-4 z-[120] pointer-events-none">
+        <div className="flex gap-2 items-center pointer-events-auto">
+          <div className="flex-1 bg-stone-900/95 backdrop-blur-2xl border border-white/10 rounded-[28px] p-1.5 shadow-2xl flex items-end min-h-[56px] transition-all">
+            <textarea
+              value={text}
+              onChange={e => setText(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              onInput={(e) => {
+                const target = e.target as HTMLTextAreaElement;
+                target.style.height = 'auto';
+                target.style.height = `${Math.min(120, target.scrollHeight)}px`;
+              }}
+              className="flex-1 bg-transparent border-none text-white text-[15px] font-medium px-4 py-2.5 resize-none focus:outline-none focus:ring-0 placeholder:text-stone-500 max-h-[120px] leading-relaxed"
+              rows={1}
+              placeholder="Scrivi un messaggio..."
+            />
+          </div>
           <button
             onClick={handleSend}
             disabled={!text.trim()}
-            className="w-14 h-14 bg-rose-600 text-white rounded-[22px] flex items-center justify-center shadow-lg shadow-rose-200 active:scale-95 transition-all disabled:opacity-50 shrink-0"
+            className="w-14 h-14 bg-rose-600 text-white rounded-full flex items-center justify-center shadow-xl shadow-rose-900/40 active:scale-90 transition-all disabled:opacity-50 shrink-0"
+            title="Invia"
           >
-            <Send className="w-6 h-6 rotate-[-45deg] mr-1" />
+            <Send className="w-5 h-5 rotate-[-45deg] mr-0.5" />
           </button>
         </div>
       </div>
