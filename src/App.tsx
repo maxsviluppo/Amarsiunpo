@@ -44,7 +44,8 @@ import {
   UserCheck,
   XCircle,
   Lock,
-  Zap
+  Zap,
+  Globe
 } from 'lucide-react';
 import { cn, calculateAge, calculateMatchScore, fileToBase64, playTapSound, ITALIAN_CITIES } from './utils';
 import { UserProfile, ChatRequest, Post, SoulLink } from './types';
@@ -186,128 +187,164 @@ const AppBottomNav = () => {
   if (shouldHide) return null;
 
   return (
-    <AnimatePresence>
-      {isNavVisible && (
-        <motion.div
-          initial={{ y: 20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: 100, opacity: 0 }}
-          transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-          className="fixed bottom-8 left-0 right-0 z-[100] px-4 pointer-events-none flex justify-center"
-        >
-          <motion.div
-            drag="y"
-            dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={0.4}
-            onDragEnd={(_, info) => {
-              // Swipe down to hide
-              if (info.offset.y > 50) setIsNavVisible(false);
-            }}
-            className="pointer-events-auto shadow-2xl flex items-center border border-white/10 transition-all duration-500 w-full max-w-md bg-stone-900/95 backdrop-blur-2xl rounded-[40px] p-2 gap-1"
-          >
-            {/* Home */}
-            <Link to="/" className="relative flex-1 group">
-              <motion.div
-                whileTap={{ scale: 0.9 }}
-                className={cn(
-                  "flex flex-col items-center py-2.5 rounded-full aspect-square justify-center transition-all duration-300",
-                  activeTab === 'home' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
-                )}
-              >
-                <Home className="w-5 h-5 mb-0.5" />
-                <span className="text-[6px] font-black uppercase tracking-wider">Home</span>
-              </motion.div>
-            </Link>
-
-            {/* Bacheca */}
-            <Link to="/bacheca" className="relative flex-1 group">
-              <motion.div
-                whileTap={{ scale: 0.9 }}
-                className={cn(
-                  "flex flex-col items-center py-2.5 rounded-full aspect-square justify-center transition-all duration-300",
-                  activeTab === 'bacheca' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
-                )}
-              >
-                <Users className="w-5 h-5 mb-0.5" />
-                <span className="text-[6px] font-black uppercase tracking-wider">Bacheca</span>
-              </motion.div>
-            </Link>
-
-            {/* Feed */}
-            <Link to="/feed" className="relative flex-1 group">
-              <motion.div
-                whileTap={{ scale: 0.9 }}
-                className={cn(
-                  "flex flex-col items-center py-2.5 rounded-full aspect-square justify-center transition-all duration-300",
-                  activeTab === 'feed' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
-                )}
-              >
-                <LayoutGrid className="w-5 h-5 mb-0.5" />
-                <span className="text-[6px] font-black uppercase tracking-wider">Feed</span>
-              </motion.div>
-            </Link>
-
-            {/* Amici (SoulLink) */}
-            <Link to="/amici" className="relative flex-1 group">
-              <motion.div
-                whileTap={{ scale: 0.9 }}
-                className={cn(
-                  "flex flex-col items-center py-2.5 rounded-full aspect-square justify-center transition-all duration-300",
-                  activeTab === 'soullink' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
-                )}
-              >
-                <div className="relative">
-                  <UserCheck className="w-5 h-5 mb-0.5" />
-                  {pendingCount > 0 && (
-                    <>
-                      <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-500 rounded-full animate-ping opacity-75" />
-                      <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-500 text-white text-[7px] font-black rounded-full flex items-center justify-center border-2 border-stone-900 shadow-sm z-10">{pendingCount}</span>
-                    </>
+    <div className="fixed bottom-8 left-0 right-0 z-[100] px-4 pointer-events-none flex justify-center">
+      <motion.div
+        layout
+        initial={false}
+        animate={{
+          width: isNavVisible ? "95%" : "64px",
+          height: isNavVisible ? "auto" : "64px",
+          maxWidth: isNavVisible ? "448px" : "64px",
+          borderRadius: isNavVisible ? "40px" : "32px",
+          x: isNavVisible ? 0 : -140, // Trasla a sinistra
+        }}
+        transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+        className={cn(
+          "pointer-events-auto shadow-2xl border border-white/10 bg-stone-900/95 backdrop-blur-2xl p-2 gap-1 overflow-hidden flex items-center justify-center",
+          !isNavVisible && "cursor-pointer"
+        )}
+        onClick={() => !isNavVisible && setIsNavVisible(true)}
+        drag={isNavVisible ? "y" : false}
+        dragConstraints={{ top: 0, bottom: 0 }}
+        onDragEnd={(_, info) => {
+          if (isNavVisible && info.offset.y > 50) setIsNavVisible(false);
+        }}
+      >
+        <AnimatePresence mode="wait">
+          {isNavVisible ? (
+            <motion.div
+              key="nav-full"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="flex items-center gap-1 w-full"
+            >
+              {/* Home */}
+              <Link to="/" className="relative flex-1 group">
+                <motion.div
+                  whileTap={{ scale: 0.9 }}
+                  className={cn(
+                    "flex flex-col items-center py-2.5 rounded-full aspect-square justify-center transition-all duration-300",
+                    activeTab === 'home' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
                   )}
-                </div>
-                <span className="text-[6px] font-black uppercase tracking-wider">Amici</span>
-              </motion.div>
-            </Link>
+                >
+                  <Home className="w-5 h-5 mb-0.5" />
+                  <span className="text-[6px] font-black uppercase tracking-wider">Home</span>
+                </motion.div>
+              </Link>
 
-            {/* Chat */}
-            <Link to="/chat" className="relative flex-1 group">
-              <motion.div
-                whileTap={{ scale: 0.9 }}
-                className={cn(
-                  "flex flex-col items-center py-2.5 rounded-full aspect-square justify-center transition-all duration-300",
-                  activeTab === 'chat' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
-                )}
-              >
-                <div className="relative" id="nav-chat-icon">
-                  <MessageCircle className="w-5 h-5 mb-0.5" />
-                  {chatCount > 0 && (
-                    <>
-                      <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-500 rounded-full animate-ping opacity-75" />
-                      <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-500 text-white text-[7px] font-black rounded-full flex items-center justify-center border-2 border-stone-900 shadow-sm z-10">{chatCount}</span>
-                    </>
+              {/* Bacheca */}
+              <Link to="/bacheca" className="relative flex-1 group">
+                <motion.div
+                  whileTap={{ scale: 0.9 }}
+                  className={cn(
+                    "flex flex-col items-center py-2.5 rounded-full aspect-square justify-center transition-all duration-300",
+                    activeTab === 'bacheca' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
                   )}
-                </div>
-                <span className="text-[6px] font-black uppercase tracking-wider">Chat</span>
-              </motion.div>
-            </Link>
+                >
+                  <Users className="w-5 h-5 mb-0.5" />
+                  <span className="text-[6px] font-black uppercase tracking-wider">Bacheca</span>
+                </motion.div>
+              </Link>
 
-            {/* SoulMatch (Heart Button) */}
-            <Link to="/soul-match" className="relative flex-1 group">
-              <motion.div
-                whileTap={{ scale: 0.9 }}
-                className={cn(
-                  "flex flex-col items-center py-2.5 rounded-full aspect-square justify-center transition-all duration-300",
-                  activeTab === 'soulmatch' ? "bg-rose-600 text-white shadow-lg shadow-rose-500/40" : "text-stone-400 hover:text-white"
+              {/* Feed */}
+              <Link to="/feed" className="relative flex-1 group">
+                <motion.div
+                  whileTap={{ scale: 0.9 }}
+                  className={cn(
+                    "flex flex-col items-center py-2.5 rounded-full aspect-square justify-center transition-all duration-300",
+                    activeTab === 'feed' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
+                  )}
+                >
+                  <LayoutGrid className="w-5 h-5 mb-0.5" />
+                  <span className="text-[6px] font-black uppercase tracking-wider">Feed</span>
+                </motion.div>
+              </Link>
+
+              {/* Amici (SoulLink) */}
+              <Link to="/amici" className="relative flex-1 group">
+                <motion.div
+                  whileTap={{ scale: 0.9 }}
+                  className={cn(
+                    "flex flex-col items-center py-2.5 rounded-full aspect-square justify-center transition-all duration-300",
+                    activeTab === 'soullink' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
+                  )}
+                >
+                  <div className="relative">
+                    <UserCheck className="w-5 h-5 mb-0.5" />
+                    {pendingCount > 0 && (
+                      <>
+                        <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-500 rounded-full animate-ping opacity-75" />
+                        <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-500 text-white text-[7px] font-black rounded-full flex items-center justify-center border-2 border-stone-900 shadow-sm z-10">{pendingCount}</span>
+                      </>
+                    )}
+                  </div>
+                  <span className="text-[6px] font-black uppercase tracking-wider">Amici</span>
+                </motion.div>
+              </Link>
+
+              {/* Chat */}
+              <Link to="/chat" className="relative flex-1 group">
+                <motion.div
+                  whileTap={{ scale: 0.9 }}
+                  className={cn(
+                    "flex flex-col items-center py-2.5 rounded-full aspect-square justify-center transition-all duration-300",
+                    activeTab === 'chat' ? "bg-white text-stone-900 shadow-lg" : "text-stone-400 hover:text-white"
+                  )}
+                >
+                  <div className="relative" id="nav-chat-icon">
+                    <MessageCircle className="w-5 h-5 mb-0.5" />
+                    {chatCount > 0 && (
+                      <>
+                        <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-500 rounded-full animate-ping opacity-75" />
+                        <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-500 text-white text-[7px] font-black rounded-full flex items-center justify-center border-2 border-stone-900 shadow-sm z-10">{chatCount}</span>
+                      </>
+                    )}
+                  </div>
+                  <span className="text-[6px] font-black uppercase tracking-wider">Chat</span>
+                </motion.div>
+              </Link>
+
+              {/* SoulMatch (Heart Button) */}
+              <Link to="/soul-match" className="relative flex-1 group">
+                <motion.div
+                  whileTap={{ scale: 0.9 }}
+                  className={cn(
+                    "flex flex-col items-center py-2.5 rounded-full aspect-square justify-center transition-all duration-300",
+                    activeTab === 'soulmatch' ? "bg-rose-600 text-white shadow-lg shadow-rose-500/40" : "text-stone-400 hover:text-white"
+                  )}
+                >
+                  <Heart className={cn("w-5 h-5 mb-0.5", activeTab === 'soulmatch' ? "fill-current" : "")} />
+                  <span className="text-[6px] font-black uppercase tracking-wider">Match</span>
+                </motion.div>
+              </Link>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="nav-bubble"
+              initial={{ opacity: 0, scale: 0.5 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.5 }}
+              className="flex items-center justify-center w-full h-full bg-stone-900 rounded-full"
+            >
+              <div className="relative flex items-center justify-center">
+                <motion.div
+                  animate={{ scale: [1, 1.3, 1] }}
+                  transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
+                >
+                  <Heart className="w-8 h-8 text-rose-600 fill-current drop-shadow-[0_0_15px_rgba(225,29,72,0.8)]" />
+                </motion.div>
+                {(pendingCount + chatCount) > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white text-[8px] font-black rounded-full flex items-center justify-center border-2 border-stone-900 shadow-sm z-10">
+                    {pendingCount + chatCount}
+                  </span>
                 )}
-              >
-                <Heart className={cn("w-5 h-5 mb-0.5", activeTab === 'soulmatch' ? "fill-current" : "")} />
-                <span className="text-[6px] font-black uppercase tracking-wider">Match</span>
-              </motion.div>
-            </Link>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+    </div>
   );
 };
 
@@ -2573,6 +2610,22 @@ const BachecaPage = () => {
                       onContextMenu={e => e.preventDefault()}
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/100 via-black/40 to-transparent" />
+
+                    {/* Match Score Badge (Permanent) - REDESIGNED: Concave & 60% Larger */}
+                    {currentUser && (
+                      <div className="absolute top-0 left-0 z-20 pointer-events-none drop-shadow-[0_4px_10px_rgba(225,29,72,0.4)]">
+                        <svg width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-[88px] h-[88px]">
+                          <path d="M 0 0 L 100 0 Q 15 15 0 100 Z" fill="#e11d48" />
+                        </svg>
+                        <div className="absolute top-4 left-4 flex flex-col items-center justify-center">
+                          <Heart className="w-8 h-8 text-white/30 fill-current absolute -top-1 -left-1 rotate-[-15deg] scale-125" />
+                          <span className="text-[24px] font-black text-white relative z-10 leading-none drop-shadow-md">
+                            {calculateMatchScore(currentUser, profile)}%
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="absolute bottom-0 left-0 right-0 p-4">
                       <p className="text-white text-[13px] font-black drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] truncate mb-0.5">
                         {profile.name}{profile.dob && calculateAge(profile.dob) > 0 ? `, ${calculateAge(profile.dob)}` : ''}
@@ -2794,12 +2847,20 @@ const SoulMatchConfirmBanner = ({ onConfirm }: { onConfirm: () => void }) => {
 // ── SoulMatch Page ──────────────────────────────────────────────────────
 const SoulMatchPage = () => {
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
+  const [friends, setFriends] = useState<string[]>([]); // Friend IDs
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
-  const [showRankings, setShowRankings] = useState(() => {
-    return localStorage.getItem('soulmatch_active') === 'true';
-  });
+  const [mode, setMode] = useState<'global' | 'friends'>('global');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // 1:1 Match State
+  const [targetUser, setTargetUser] = useState<UserProfile | null>(null);
   const [calculating, setCalculating] = useState(false);
+  const [matchScore, setMatchScore] = useState<number | null>(null);
+
+  // Top 10 Discovery State
+  const [showRankings, setShowRankings] = useState(false);
+
   const navigate = useNavigate();
 
   const fetchProfiles = async () => {
@@ -2807,189 +2868,466 @@ const SoulMatchPage = () => {
     if (data) {
       setProfiles(data.map(u => normalizeUser(u)));
     }
-    setLoading(false);
+  };
+
+  const fetchFriends = async (userId: string) => {
+    const { data } = await supabase
+      .from('soul_links')
+      .select('sender_id, receiver_id')
+      .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+      .eq('status', 'accepted');
+
+    if (data) {
+      const ids = data.map(sl => sl.sender_id === userId ? sl.receiver_id : sl.sender_id);
+      setFriends(ids);
+    }
   };
 
   useEffect(() => {
-    const saved = localStorage.getItem('soulmatch_user');
-    if (saved) {
-      setCurrentUser(normalizeUser(JSON.parse(saved)));
-      fetchProfiles();
-    } else {
-      navigate('/register');
-    }
+    const init = async () => {
+      const saved = localStorage.getItem('soulmatch_user');
+      if (saved) {
+        const u = normalizeUser(JSON.parse(saved));
+        setCurrentUser(u);
+        await Promise.all([fetchProfiles(), fetchFriends(u.id)]);
+      } else {
+        navigate('/register');
+      }
+      setLoading(false);
+    };
+    init();
   }, [navigate]);
 
-  const filtered = profiles.filter(p => {
-    if (!currentUser || p.id === currentUser.id) return false;
-    // Exclude if no photo
-    if (!p.photos?.length && !p.photo_url) return false;
-
-    // Base preference check - Consistent with Bacheca
+  const genderFilter = (p: UserProfile) => {
+    if (!currentUser) return false;
     const wantsV = (currentUser.looking_for_gender || []).map(g => g.toLowerCase());
     const isWildcard = (arr: string[]) => arr.some(v => ['tutti', 'tutte', 'entrambi', 'qualsiasi', 'tutti i generi'].includes(v));
     const targetGender = p.gender?.toLowerCase() || '';
-
     return wantsV.length === 0 || isWildcard(wantsV) || wantsV.includes(targetGender);
+  };
+
+  const currentList = profiles.filter(p => {
+    if (p.id === currentUser?.id) return false;
+    if (!p.photos?.length && !p.photo_url) return false;
+    if (mode === 'friends' && !friends.includes(p.id)) return false;
+    if (!genderFilter(p)) return false;
+    if (searchQuery && !p.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    return true;
   });
 
-  const ranked = [...filtered]
+  const ranked = [...currentList]
     .map(p => ({ ...p, _score: calculateMatchScore(currentUser, p) }))
-    .sort((a, b) => b._score - a._score)
-    .slice(0, 10);
+    .sort((a, b) => b._score - a._score);
 
-  const startCalculation = () => {
+  const handleStartMatch = (user: UserProfile) => {
+    setTargetUser(user);
     setCalculating(true);
+    setMatchScore(null);
+    setShowRankings(false);
+    setTimeout(() => {
+      setMatchScore(calculateMatchScore(currentUser, user));
+      setCalculating(false);
+    }, 2200);
+  };
+
+  const startTop10Discovery = () => {
+    setCalculating(true);
+    setTargetUser(null);
     setTimeout(() => {
       setCalculating(false);
       setShowRankings(true);
-      localStorage.setItem('soulmatch_active', 'true');
     }, 2500);
   };
 
   return (
-    <div className="min-h-screen bg-stone-50 pt-20 pb-28 px-4">
-      <div className="max-w-md mx-auto space-y-8">
-        {/* Banner with names */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between px-1">
-            <h2 className="text-xl font-serif font-black text-stone-900">Chi c'è in Bacheca</h2>
-            <span className="text-[10px] font-black bg-stone-100 text-stone-400 px-3 py-1 rounded-full uppercase tracking-widest border border-stone-100">Live</span>
-          </div>
+    <div className="min-h-screen bg-stone-50 pt-20 pb-40 px-4 transition-colors duration-500">
+      <div className="max-w-md mx-auto space-y-6">
 
-          <div className="bg-white rounded-[32px] p-2 border border-stone-100 shadow-sm overflow-hidden">
-            <div className="flex items-center gap-4 overflow-x-auto scrollbar-hide py-3 px-3">
-              {loading ? (
-                [1, 2, 3, 4, 5].map(i => <div key={i} className="w-14 h-14 bg-stone-50 animate-pulse rounded-[18px] shrink-0" />)
-              ) : filtered.length === 0 ? (
-                <span className="text-[10px] text-stone-400 font-bold px-4">Nessun profilo in bacheca...</span>
-              ) : (
-                filtered.slice(0, 20).map((p, i) => (
-                  <motion.div
-                    key={p.id}
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: i * 0.05 }}
-                    onClick={() => navigate(`/profile-detail/${p.id}`)}
-                    className="flex flex-col items-center gap-1.5 shrink-0 cursor-pointer"
-                  >
-                    <div className="w-14 h-14 rounded-[20px] p-[2px] bg-gradient-to-tr from-rose-100 to-rose-200 shadow-sm relative">
-                      <div className="w-full h-full bg-white rounded-[18px] p-0.5">
-                        <img src={p.photos?.[0] || p.photo_url || `https://picsum.photos/seed/${p.name}/100`} className="w-full h-full object-cover rounded-[16px]" />
+        {/* PREMIUM TABS */}
+        <motion.div
+          initial={{ y: -20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          className="flex justify-center gap-3 pt-2"
+        >
+          {[
+            { id: 'global', label: 'Globale', icon: Globe, count: profiles.length },
+            { id: 'friends', label: 'SoulLinks', icon: Users, count: friends.length }
+          ].map(tab => {
+            const isActive = mode === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => { setMode(tab.id as any); setTargetUser(null); setShowRankings(false); setSearchQuery(''); }}
+                className={cn(
+                  "flex-1 flex flex-col items-center justify-center gap-1.5 px-1 py-3.5 rounded-[28px] shadow-sm transition-all relative overflow-hidden",
+                  isActive
+                    ? "bg-stone-900/95 backdrop-blur-xl border border-white/10 text-white"
+                    : "bg-white border border-stone-100 text-stone-400 opacity-80"
+                )}
+              >
+                <tab.icon className={cn("w-5 h-5", isActive ? "text-white" : "text-stone-300")} />
+                <div className="flex flex-col items-center">
+                  <span className={cn("text-[8px] font-black uppercase tracking-wider leading-none text-center", isActive ? "text-white" : "text-stone-500")}>
+                    {tab.label}
+                  </span>
+                  <span className={cn("text-[8px] font-black mt-1", isActive ? "text-white/40 tracking-wider" : "text-stone-400 tracking-wider")}>
+                    {tab.count}
+                  </span>
+                </div>
+              </button>
+            );
+          })}
+        </motion.div>
+
+        {/* SEARCH BAR (for SoulLinks) */}
+        {mode === 'friends' && !targetUser && !showRankings && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="relative"
+          >
+            <input
+              type="text"
+              placeholder="Cerca tra i tuoi amici..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full h-14 pl-14 pr-4 bg-white border border-stone-100 rounded-[22px] shadow-sm text-sm font-black focus:ring-2 focus:ring-rose-200 outline-none transition-all placeholder:text-stone-300"
+            />
+            <div className="absolute left-2.5 top-1/2 -translate-y-1/2 w-10 h-10 bg-stone-900 rounded-full flex items-center justify-center text-white shadow-lg">
+              <Search className="w-4 h-4" />
+            </div>
+          </motion.div>
+        )}
+
+        {/* PROFILE GRID (GRID STYLE like livechat) */}
+        {!targetUser && !showRankings && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+              {currentList.map((p, idx) => (
+                <motion.div
+                  key={p.id}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: idx * 0.05 }}
+                  onClick={() => handleStartMatch(p)}
+                  className="bg-stone-200 rounded-[32px] aspect-[3/5.5] relative group cursor-pointer active:scale-95 transition-all overflow-hidden border border-stone-100 shadow-xl"
+                >
+                  <img
+                    src={p.photos?.[0] || p.photo_url || `https://picsum.photos/seed/${p.name}/400`}
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-stone-900/95 via-stone-900/10 to-transparent opacity-90 transition-opacity" />
+
+                  {/* Match Score Badge (Permanent) - REDESIGNED: Concave & 60% Larger */}
+                  {currentUser && (
+                    <div className="absolute top-0 left-0 z-20 pointer-events-none drop-shadow-[0_4px_10px_rgba(225,29,72,0.4)]">
+                      <svg width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-[88px] h-[88px]">
+                        <path d="M 0 0 L 100 0 Q 15 15 0 100 Z" fill="#e11d48" />
+                      </svg>
+                      <div className="absolute top-4 left-4 flex flex-col items-center justify-center">
+                        <Heart className="w-8 h-8 text-white/30 fill-current absolute -top-1 -left-1 rotate-[-15deg] scale-125" />
+                        <span className="text-[24px] font-black text-white relative z-10 leading-none drop-shadow-md">
+                          {calculateMatchScore(currentUser, p)}%
+                        </span>
                       </div>
-                      {p.is_online && (
-                        <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full" />
-                      )}
                     </div>
-                    <span className="text-[9px] font-black text-stone-600 truncate w-14 text-center">{p.name}</span>
-                  </motion.div>
-                ))
-              )}
+                  )}
+
+                  {p.is_online && (
+                    <div className="absolute top-4 right-4 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-white shadow-sm" />
+                  )}
+
+                  <div className="absolute bottom-5 left-5 right-5 text-white">
+                    <p className="font-montserrat font-black text-base truncate">{p.name}</p>
+                    <p className="text-[11px] font-black uppercase tracking-widest opacity-80 flex items-center gap-1.5 line-clamp-1">
+                      <MapPin className="w-3 h-3 text-rose-500" /> {p.city}
+                    </p>
+                    <div className="mt-2 text-[10px] font-black text-rose-400 uppercase tracking-[0.2em] italic">
+                      {p.is_online ? 'Live Now' : 'Sync Profile'}
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
             </div>
-          </div>
-        </div>
 
-        {/* Launch Button */}
-        {!showRankings && (
-          <div className="py-12 flex flex-col items-center justify-center space-y-6">
-            <div className="text-center space-y-2 px-4">
-              <h1 className="text-3xl font-serif font-black text-stone-900 leading-tight">Trova la tua <br />Anima Gemella.</h1>
-              <p className="text-stone-500 text-sm font-medium leading-relaxed">
-                Il nostro algoritmo AI analizzerà i profili live per trovare i 10 match più affini a te.
-              </p>
-            </div>
+            {/* Pulsing Match Heart (Global View) */}
+            {mode === 'global' && currentList.length > 0 && (
+              <div className="flex flex-col items-center py-10">
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  animate={{ scale: [1, 1.1, 1] }}
+                  transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+                  onClick={startTop10Discovery}
+                  className="w-44 h-44 bg-rose-600 rounded-full flex flex-col items-center justify-center text-white shadow-[0_0_60px_rgba(225,29,72,0.4)] relative group"
+                >
+                  <Heart className="w-20 h-20 fill-current mb-1" />
+                  <span className="text-2xl font-black uppercase tracking-[0.2em]">Match</span>
 
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={startCalculation}
-              disabled={calculating || filtered.length === 0}
-              className={cn(
-                "w-28 h-28 rounded-full flex flex-col items-center justify-center text-white shadow-2xl relative transition-all",
-                calculating ? "bg-stone-900" : "bg-rose-600 shadow-rose-300/50"
-              )}
-            >
-              <Heart className={cn("w-10 h-10 fill-current mb-0.5", calculating ? "animate-ping" : "animate-pulse")} />
-              <span className="text-[9px] font-black uppercase tracking-widest mt-1">
-                {calculating ? "Analisi..." : "Lancia"}
-              </span>
-
-              {/* Spinning border when calculating */}
-              {calculating && (
-                <div className="absolute inset-0 border-4 border-rose-500 border-t-transparent rounded-full animate-spin" />
-              )}
-            </motion.button>
-
-            {filtered.length === 0 && !loading && (
-              <p className="text-[10px] text-rose-500 font-bold uppercase tracking-widest bg-rose-50 px-4 py-2 rounded-full border border-rose-100 animate-bounce">
-                Registrati o imposta filtri per iniziare!
-              </p>
+                  <motion.div
+                    animate={{ scale: [1, 1.5, 1.8], opacity: [0.5, 0.2, 0] }}
+                    transition={{ repeat: Infinity, duration: 2 }}
+                    className="absolute inset-0 rounded-full border-4 border-rose-400"
+                  />
+                </motion.button>
+                <p className="mt-8 text-[11px] font-black text-rose-500 uppercase tracking-[0.4em] animate-pulse">Sincronizza Anime</p>
+              </div>
             )}
           </div>
         )}
 
-        {/* Results */}
+        {/* 1:1 MATCH CALCULATION VIEW */}
+        {targetUser && !showRankings && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="fixed inset-0 z-[200] bg-white flex flex-col items-center justify-between py-12 px-6"
+          >
+            {/* Header */}
+            <div className="w-full flex items-center justify-between">
+              <button
+                onClick={() => setTargetUser(null)}
+                className="w-12 h-12 bg-stone-50 rounded-full flex items-center justify-center text-stone-400 border border-stone-100"
+              >
+                <X className="w-6 h-6" />
+              </button>
+              <div className="flex flex-col items-center">
+                <h2 className="text-xl font-serif font-black text-[#2E1139]">Analisi SoulMatch</h2>
+                <span className="text-[8px] font-black text-rose-500 uppercase tracking-[0.3em]">Sincronizzazione Perfetta</span>
+              </div>
+              <div className="w-12" />
+            </div>
+
+            {/* Main Content Area */}
+            <div className="flex-1 flex flex-col items-center justify-center w-full space-y-12">
+              <div className="text-center space-y-2">
+                <h1 className="text-3xl font-serif font-black text-[#2E1139]">Trova la tua anima gemella</h1>
+                <p className="text-stone-400 text-xs font-medium max-w-[240px] mx-auto">Calcoliamo l'affinità energetica per una connessione perfetta.</p>
+              </div>
+
+              {/* DYNAMIC AVATAR COMPOSITION (MAXI SIZE) */}
+              <div className="relative w-80 h-80 flex items-center justify-center scale-110">
+                {/* AVATAR TOP LEFT */}
+                <motion.div
+                  animate={{
+                    y: [0, -15, 0],
+                    scale: [1, 1.05, 1],
+                    rotate: [-8, -6, -8]
+                  }}
+                  transition={{
+                    repeat: Infinity,
+                    duration: 4,
+                    ease: "easeInOut"
+                  }}
+                  className="absolute top-0 left-0 w-56 h-56 border-[10px] border-white shadow-2xl overflow-hidden z-10 bg-rose-50"
+                  style={{
+                    borderRadius: "38% 62% 63% 37% / 41% 44% 56% 59%" // Irregular border/blob
+                  }}
+                >
+                  <img src={currentUser?.photos?.[0] || currentUser?.photo_url || `https://picsum.photos/seed/me/400`} className="w-full h-full object-cover" />
+                </motion.div>
+
+                {/* AVATAR BOTTOM RIGHT */}
+                <motion.div
+                  animate={{
+                    y: [0, 15, 0],
+                    scale: [1, 1.05, 1],
+                    rotate: [8, 10, 8]
+                  }}
+                  transition={{
+                    repeat: Infinity,
+                    duration: 4,
+                    ease: "easeInOut",
+                    delay: 0.5
+                  }}
+                  className="absolute bottom-0 right-0 w-56 h-56 border-[10px] border-white shadow-2xl overflow-hidden z-10 bg-purple-50"
+                  style={{
+                    borderRadius: "62% 38% 37% 63% / 59% 56% 44% 41%" // Irregular border/blob
+                  }}
+                >
+                  <img src={targetUser.photos?.[0] || targetUser.photo_url || `https://picsum.photos/seed/${targetUser.name}/400`} className="w-full h-full object-cover" />
+                </motion.div>
+
+                {/* MATCH HEART BADGE (Center Score) */}
+                <motion.div
+                  initial={{ scale: 0, opacity: 0 }}
+                  animate={{
+                    scale: matchScore !== null ? [1, 1.15, 1] : 0,
+                    opacity: matchScore !== null ? 1 : 0
+                  }}
+                  transition={{
+                    scale: { repeat: Infinity, duration: 1.5 },
+                    opacity: { duration: 0.5 }
+                  }}
+                  className="absolute z-20 w-36 h-36 flex items-center justify-center"
+                >
+                  <Heart className="w-full h-full text-rose-600 fill-current drop-shadow-[0_0_25px_rgba(225,29,72,0.6)]" />
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-white pb-2">
+                    <span className="text-2xl font-black tracking-tighter leading-none">{matchScore}%</span>
+                    <span className="text-[9px] font-black uppercase tracking-[0.3em] opacity-80 mt-1">Match</span>
+                  </div>
+                </motion.div>
+              </div>
+
+              {/* Match Feedback or Loading */}
+              <div className="w-full max-w-xs text-center min-h-[60px]">
+                {calculating ? (
+                  <div className="space-y-4">
+                    <div className="flex justify-center space-x-2">
+                      {[0, 1, 2].map(i => (
+                        <motion.div key={i} animate={{ scale: [1, 1.5, 1], opacity: [0.3, 1, 0.3] }} transition={{ repeat: Infinity, duration: 1, delay: i * 0.2 }} className="w-2.5 h-2.5 bg-rose-500 rounded-full" />
+                      ))}
+                    </div>
+                    <p className="text-[10px] font-black text-[#2E1139] uppercase tracking-[0.5em] animate-pulse">Sincronizzazione in corso</p>
+                  </div>
+                ) : matchScore !== null && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-3"
+                  >
+                    <p className="text-[#2E1139] text-sm font-black italic">
+                      {matchScore >= 80 ? '"Una sintonia rara e profonda."' :
+                        matchScore >= 50 ? '"Ottime basi per connettersi."' :
+                          '"Differenze interessanti da esplorare."'}
+                    </p>
+                    <p className="text-stone-400 text-[11px] font-medium leading-relaxed italic px-4">
+                      {matchScore >= 80 ? "Le vostre anime risuonano sulla stessa frequenza." :
+                        matchScore >= 50 ? "C'è molto da scoprire insieme in questa danza." :
+                          "L'attrazione nasce spesso dal contrasto."}
+                    </p>
+                  </motion.div>
+                )}
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="w-full space-y-4">
+              <button
+                onClick={() => navigate(`/profile-detail/${targetUser.id}`)}
+                className="w-full h-18 bg-[#2E1139] text-white rounded-[28px] text-sm font-black uppercase tracking-[0.2em] shadow-xl shadow-purple-900/20 active:scale-95 transition-all"
+              >
+                Visualizza Profilo
+              </button>
+              <button
+                onClick={() => setTargetUser(null)}
+                className="w-full h-16 bg-rose-50 text-rose-600 rounded-[28px] text-xs font-black uppercase tracking-[0.2em] active:scale-95 transition-all"
+              >
+                Torna alla Bacheca
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        {/* RESULTS (Top 10 Rankings) */}
         <AnimatePresence>
           {showRankings && (
             <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="space-y-4"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="space-y-6 pb-20"
             >
-              <div className="flex items-center justify-between px-1">
-                <h3 className="text-lg font-serif font-black text-stone-900">✨ Top 10 Match Ideali</h3>
-                <button onClick={() => { setShowRankings(false); localStorage.removeItem('soulmatch_active'); }} className="text-xs font-black text-rose-600 underline uppercase tracking-widest">Ricomincia</button>
-              </div>
+              <div className="h-6" /> {/* Reserved spacing for header removed */}
 
-              {ranked.map((p, idx) => (
-                <motion.div
-                  key={p.id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: idx * 0.1 }}
-                  className="bg-white rounded-[24px] border border-stone-100 shadow-sm overflow-hidden"
-                >
-                  <div className="flex items-center gap-4 p-4">
-                    <div className={cn(
-                      "w-8 h-8 rounded-[12px] flex items-center justify-center text-xs font-black shrink-0",
-                      idx === 0 ? "bg-amber-400 text-stone-900" :
-                        idx === 1 ? "bg-stone-300 text-stone-700" :
-                          idx === 2 ? "bg-orange-300 text-stone-700" :
-                            "bg-stone-100 text-stone-500"
-                    )}>
-                      #{idx + 1}
-                    </div>
-                    <div className="w-16 h-16 rounded-[18px] overflow-hidden border border-stone-100 shadow-sm shrink-0">
-                      <img src={p.photos?.[0] || p.photo_url || `https://picsum.photos/seed/${p.name}/200`} className="w-full h-full object-cover" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-black text-stone-900 truncate">
-                        {p.name}{calculateAge(p.dob) > 0 ? `, ${calculateAge(p.dob)}` : ''}
-                      </h3>
-                      <div className="mt-2 flex items-center gap-2">
-                        <div className="flex-1 h-1.5 bg-stone-100 rounded-full overflow-hidden">
-                          <motion.div
-                            initial={{ width: 0 }}
-                            animate={{ width: `${p._score}%` }}
-                            transition={{ delay: idx * 0.1 + 0.5, duration: 1 }}
-                            className={cn('h-full rounded-full', p._score >= 70 ? 'bg-rose-500' : p._score >= 40 ? 'bg-amber-400' : 'bg-stone-300')}
-                          />
-                        </div>
-                        <span className="text-[10px] font-black text-stone-400 shrink-0">{p._score}%</span>
-                      </div>
-                    </div>
-                    <Link
-                      to={`/profile-detail/${p.id}`}
-                      className="w-10 h-10 bg-rose-600 text-white rounded-[14px] flex items-center justify-center shadow-md active:scale-90 shrink-0"
+              <div className="space-y-4">
+                {ranked.map((p, idx) => {
+                  const isTop = idx === 0;
+                  return (
+                    <motion.div
+                      key={p.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: idx * 0.1 }}
+                      onClick={() => handleStartMatch(p)}
+                      className={cn(
+                        "relative overflow-hidden group cursor-pointer transition-all",
+                        isTop ? "rounded-[40px] p-8 bg-stone-900 text-white shadow-2xl shadow-rose-900/30" : "bg-white rounded-[28px] border border-stone-100 shadow-md p-5 flex items-center gap-5 hover:border-rose-200"
+                      )}
                     >
-                      <ChevronRight className="w-5 h-5" />
-                    </Link>
-                  </div>
-                </motion.div>
-              ))}
+                      {isTop ? (
+                        <div className="space-y-6">
+                          <div className="flex items-center justify-between">
+                            <div className="bg-rose-600 px-5 py-2 rounded-full text-[11px] font-black uppercase tracking-[0.25em] shadow-lg shadow-rose-600/20">Soul Match n.1</div>
+                            <div className="flex flex-col items-end">
+                              <span className="text-3xl font-black text-rose-500">{p._score}%</span>
+                              <span className="text-[8px] text-white/40 uppercase font-black tracking-widest">Affinità</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-6">
+                            <div className="w-28 h-28 rounded-[32px] overflow-hidden border-2 border-white/20 shadow-2xl shrink-0 group-hover:scale-105 transition-transform duration-500">
+                              <img src={p.photos?.[0] || p.photo_url || `https://picsum.photos/seed/${p.name}/400`} className="w-full h-full object-cover" />
+                            </div>
+                            <div className="flex-1 space-y-2">
+                              <h3 className="text-2xl font-montserrat font-black leading-tight">{p.name}, {calculateAge(p.dob)}</h3>
+                              <p className="text-white/60 text-xs font-semibold flex items-center gap-1.5"><MapPin className="w-4 h-4 text-rose-500" />{p.city}</p>
+
+                              <div className="mt-4 bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center justify-between group-hover:bg-white/10 transition-colors">
+                                <div className="flex flex-col">
+                                  <span className="text-[10px] font-black text-rose-400 uppercase tracking-widest">Perfetto per te</span>
+                                  <span className="text-[11px] text-white/80">Siete fatti l'uno per l'altra</span>
+                                </div>
+                                <ArrowRight className="w-6 h-6 text-white" />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className={cn(
+                            "w-10 h-10 rounded-[14px] flex items-center justify-center text-sm font-black shrink-0 shadow-inner",
+                            idx === 1 ? "bg-stone-100 text-amber-500" :
+                              idx === 2 ? "bg-stone-100 text-stone-500" :
+                                "bg-stone-50 text-stone-300"
+                          )}>
+                            #{idx + 1}
+                          </div>
+                          <div className="w-20 h-20 rounded-[22px] overflow-hidden border border-stone-100 shadow-sm shrink-0">
+                            <img src={p.photos?.[0] || p.photo_url || `https://picsum.photos/seed/${p.name}/200`} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                          </div>
+                          <div className="flex-1 min-w-0 space-y-1">
+                            <h3 className="text-base font-montserrat font-black text-stone-900 truncate">
+                              {p.name}{calculateAge(p.dob) > 0 ? `, ${calculateAge(p.dob)}` : ''}
+                            </h3>
+                            <p className="text-[10px] text-stone-400 font-bold flex items-center gap-1 uppercase tracking-widest"><MapPin className="w-3 h-3" /> {p.city}</p>
+                            <div className="mt-3 flex items-center gap-3">
+                              <div className="flex-1 h-2 bg-stone-100 rounded-full overflow-hidden">
+                                <motion.div
+                                  initial={{ width: 0 }}
+                                  animate={{ width: `${p._score}%` }}
+                                  transition={{ delay: idx * 0.1 + 0.5, duration: 1 }}
+                                  className={cn('h-full rounded-full shadow-sm', p._score >= 70 ? 'bg-gradient-to-r from-rose-500 to-rose-600' : p._score >= 40 ? 'bg-amber-400' : 'bg-stone-300')}
+                                />
+                              </div>
+                              <span className="text-[11px] font-black text-stone-900 shrink-0">{p._score}%</span>
+                            </div>
+                          </div>
+                          <div className="w-10 h-10 rounded-full bg-stone-100 flex items-center justify-center text-stone-300 group-hover:bg-rose-50 group-hover:text-rose-500 transition-all">
+                            <ChevronRight className="w-6 h-6" />
+                          </div>
+                        </>
+                      )}
+                    </motion.div>
+                  );
+                })}
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Empty States */}
+        {!targetUser && !showRankings && currentList.length === 0 && (
+          <div className="py-20 text-center space-y-4">
+            <div className="w-20 h-20 bg-stone-100 rounded-full flex items-center justify-center mx-auto text-stone-300">
+              <Users className="w-10 h-10" />
+            </div>
+            <div className="space-y-1 px-8">
+              <p className="text-stone-900 font-serif font-black">Nessun profilo trovato</p>
+              <p className="text-stone-400 text-[11px] font-medium leading-relaxed">
+                {mode === 'friends' ? "Cerca amici per iniziare il match." : "I profili compatibili appariranno qui."}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
