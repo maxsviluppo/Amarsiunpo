@@ -2901,76 +2901,71 @@ const BachecaPage = () => {
           </div>
         ) : (
           /* Asymmetric masonry grid */
-          <div className="columns-2 gap-2.5 space-y-0">
-            {filteredProfiles.map((profile, idx) => {
-              // Alternate tall/short for masonry feel
-              const isTall = idx % 5 === 0 || idx % 5 === 3;
-              return (
-                <motion.div
-                  key={profile.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  whileHover={{ scale: 1.02, boxShadow: '0 0 20px rgba(244,63,94,0.35), 0 0 50px rgba(244,63,94,0.18), 0 0 90px rgba(147,51,234,0.1)' }}
-                  whileTap={{ scale: 0.97, boxShadow: '0 0 30px rgba(244,63,94,0.5), 0 0 70px rgba(244,63,94,0.25)' }}
-                  transition={{ delay: idx * 0.035, duration: 0.5, ease: 'easeOut' }}
-                  className="break-inside-avoid mb-2.5 relative group"
-                  style={{ transformOrigin: 'center center' }}
-                >
-                  <Link to={`/profile-detail/${profile.id}`}>
-                    <div
-                      className="rounded-[22px] overflow-hidden relative transition-shadow duration-300"
-                      style={{ aspectRatio: '3/4', background: '#1a1a22', boxShadow: '0 4px 32px rgba(0,0,0,0.5)' }}
-                    >
-                      <img
-                        src={profile.photos?.[0] || profile.photo_url || `https://picsum.photos/seed/${profile.name}/400/500`}
-                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                        onContextMenu={e => e.preventDefault()}
-                      />
-                      {/* Dark vignette */}
-                      <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.3) 50%, transparent 100%)' }} />
+          <div className="grid grid-cols-2 gap-2.5">
+            {filteredProfiles.map((profile, idx) => (
+              <motion.div
+                key={profile.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
+                transition={{ delay: idx * 0.04, duration: 0.4, ease: 'easeOut' }}
+                className="relative group"
+              >
+                <Link to={`/profile-detail/${profile.id}`}>
+                  <div
+                    className="rounded-[22px] overflow-hidden relative"
+                    style={{ aspectRatio: '3/4', background: '#1a1a22', boxShadow: '0 4px 32px rgba(0,0,0,0.5)' }}
+                  >
+                    <img
+                      src={profile.photos?.[0] || profile.photo_url || `https://picsum.photos/seed/${profile.name}/400/500`}
+                      alt={profile.name}
+                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                      onContextMenu={e => e.preventDefault()}
+                    />
+                    {/* Dark vignette */}
+                    <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.3) 50%, transparent 100%)' }} />
 
-                      {/* Online indicator */}
-                      {profile.is_online && (
-                        <div className="absolute top-2.5 left-2.5 z-20">
-                          <span className="relative flex h-2.5 w-2.5">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-400 border border-black/40" />
-                          </span>
-                        </div>
-                      )}
-
-
-                      {/* Match Score Badge */}
-                      {currentUser && unlockedIds.includes(profile.id) && (
-                        <div className="absolute top-0 left-0 z-20 pointer-events-none overflow-hidden rounded-tl-[22px]">
-                          <svg width="80" height="80" viewBox="0 0 100 100" fill="none" className="w-[70px] h-[70px]">
-                            <path d="M 0 0 L 100 0 Q 15 15 0 100 Z" fill="#e11d48" />
-                          </svg>
-                          <div className="absolute top-3 left-3">
-                            <span className="text-[18px] font-black text-white leading-none drop-shadow">{calculateMatchScore(currentUser, profile)}%</span>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Info */}
-                      <div className="absolute bottom-0 left-0 right-0 p-3">
-                        <p className="text-white text-[13px] font-montserrat font-black leading-tight truncate">
-                          {profile.name}{profile.dob && calculateAge(profile.dob) > 0 ? `, ${calculateAge(profile.dob)}` : ''}
-                        </p>
-                        {profile.city && (
-                          <p className="text-white text-[11px] font-bold flex items-center gap-0.5 mt-0.5 truncate">
-                            <MapPin className="w-2 h-2 text-rose-500 shrink-0" />{profile.city}
-                          </p>
-                        )}
+                    {/* Online indicator */}
+                    {profile.is_online && (
+                      <div className="absolute top-2.5 left-2.5 z-20">
+                        <span className="relative flex h-2.5 w-2.5">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-400 border border-black/40" />
+                        </span>
                       </div>
+                    )}
 
-                      {/* Neon glow border on hover/active - intense with outer back-glow */}
-                      <div className="absolute inset-0 rounded-[22px] opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-all duration-200 pointer-events-none" style={{ boxShadow: 'inset 0 0 0 2px rgba(244,63,94,0.95), 0 0 40px rgba(244,63,94,0.6), 0 0 80px rgba(244,63,94,0.25), 0 0 120px rgba(147,51,234,0.15)' }} />
+                    {/* Match Score Badge */}
+                    {currentUser && unlockedIds.includes(profile.id) && (
+                      <div className="absolute top-0 left-0 z-20 pointer-events-none overflow-hidden rounded-tl-[22px]">
+                        <svg width="80" height="80" viewBox="0 0 100 100" fill="none" className="w-[70px] h-[70px]">
+                          <path d="M 0 0 L 100 0 Q 15 15 0 100 Z" fill="#e11d48" />
+                        </svg>
+                        <div className="absolute top-3 left-3">
+                          <span className="text-[18px] font-black text-white leading-none drop-shadow">{calculateMatchScore(currentUser, profile)}%</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Info */}
+                    <div className="absolute bottom-0 left-0 right-0 p-3">
+                      <p className="text-white text-[13px] font-montserrat font-black leading-tight truncate">
+                        {profile.name}{profile.dob && calculateAge(profile.dob) > 0 ? `, ${calculateAge(profile.dob)}` : ''}
+                      </p>
+                      {profile.city && (
+                        <p className="text-white text-[11px] font-bold flex items-center gap-0.5 mt-0.5 truncate">
+                          <MapPin className="w-2 h-2 text-rose-500 shrink-0" />{profile.city}
+                        </p>
+                      )}
                     </div>
-                  </Link>
-                </motion.div>
-              );
-            })}
+
+                    {/* Neon glow border on hover */}
+                    <div className="absolute inset-0 rounded-[22px] opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-all duration-200 pointer-events-none" style={{ boxShadow: 'inset 0 0 0 2px rgba(244,63,94,0.95), 0 0 40px rgba(244,63,94,0.6), 0 0 80px rgba(244,63,94,0.25)' }} />
+                  </div>
+                </Link>
+              </motion.div>
+            ))}
           </div>
         )}
       </div>
