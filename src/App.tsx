@@ -2349,11 +2349,11 @@ const BachecaPage = () => {
   const [filterCity, setFilterCity] = useState<string>('Tutte');
   const [filterBodyType, setFilterBodyType] = useState<string>('Tutte');
   const [filterAge, setFilterAge] = useState<[number, number]>([18, 99]);
+  const [filterGender, setFilterGender] = useState<string>('Tutti');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [showSoulMatch, setShowSoulMatch] = useState(false);
   const [soulmatchToast, setSoulmatchToast] = useState(false);
-  const [selectedGenders, setSelectedGenders] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [unlockedIds, setUnlockedIds] = useState<string[]>([]);
@@ -2444,7 +2444,6 @@ const BachecaPage = () => {
       if (saved) {
         const user = normalizeUser(JSON.parse(saved));
         setCurrentUser(user);
-        setSelectedGenders((user.looking_for_gender || []).map((g: string) => g.toLowerCase()));
         fetchProfiles();
       } else {
         navigate('/register');
@@ -2486,7 +2485,8 @@ const BachecaPage = () => {
     return ['Tutte', ...Array.from(new Set(normalizedCities))].sort();
   }, [profiles]);
 
-  const filteredProfiles = profiles.filter(p => {
+  // ─── BASE compatible profiles: orientation + photo check + UI filters (no gender chip)
+  const baseCompatibleProfiles = useMemo(() => profiles.filter(p => {
     // Exclude self, blocked, suspended
     if (currentUser && p.id === currentUser.id) return false;
     if (p.is_blocked || p.is_suspended) return false;
@@ -2503,7 +2503,7 @@ const BachecaPage = () => {
     const nameMatch = !searchTerm || p.name?.toLowerCase().includes(searchTerm.toLowerCase());
     if (!cityMatch || !ageMatch || !bodyTypeMatch || !nameMatch) return false;
 
-    // ─── 2. Preference-based matching (Identità, Attrazione, Inclusione) ───
+    // ─── 2. Compatibility check (orientation + looking_for_gender)
     const getMacroArea = (gender: string) => {
       const g = gender?.toLowerCase() || '';
       if (['uomo', 'mascolino'].includes(g)) return 'M';
@@ -2520,41 +2520,81 @@ const BachecaPage = () => {
     const macroV = getMacroArea(viewer.gender);
     const macroT = getMacroArea(target.gender);
 
-    const wantsV = selectedGenders.map((g: string) => g.toLowerCase());
     const isWildcard = (arr: string[]) => arr.some(v => ['tutti', 'tutte', 'entrambi', 'qualsiasi', 'tutti i generi'].includes(v));
+    const targetGender = target.gender?.toLowerCase() || '';
 
-    // A. COMPATIBILITÀ ORIENTAMENTO (sempre applicata per prima — non bypassabile)
+    // A. PREFERENZE ESPLICITE DEL PROFILO (looking_for_gender) — massima priorità
+    // Se l'utente ha impostato looking_for_gender nel suo profilo, quello è il suo CONSENSO ESPLICITO
+    const profileWants = parseArrField(viewer.looking_for_gender).map((g: string) => g.toLowerCase());
+    const hasProfileWants = profileWants.length > 0 && !isWildcard(profileWants);
+
+    if (hasProfileWants) {
+      // Se il target rientra nelle preferenze esplicite → ok, niente altri blocchi
+      const targetAllowedByProfile = profileWants.includes(targetGender);
+      if (!targetAllowedByProfile) return false;
+
+      // Verifica reciprocità lato target (il target deve almeno potenzialmente essere aperto al viewer)
+      const orisT = target.orientation || [];
+      const checkOriTarget = (myMacro: string, myOris: string[], targetMacro: string) => {
+        if (!myOris || myOris.length === 0) return true;
+        if (myMacro === 'NB' || targetMacro === 'NB') return true;
+        if (myOris.includes('Eterosessuale')) {
+          return (myMacro === 'M' && targetMacro === 'F') || (myMacro === 'F' && targetMacro === 'M') || targetMacro === 'TRANS';
+        }
+        if (myOris.includes('Gay') || myOris.includes('Lesbica')) {
+          return myMacro === targetMacro || targetMacro === 'TRANS' || targetMacro === 'NB';
+        }
+        return true;
+      };
+      const targetCompatible = checkOriTarget(macroT, orisT, macroV);
+      if (!targetCompatible) return false;
+
+      return true;
+    }
+
+    // B. FALLBACK: Inferenza da orientamento (quando looking_for_gender è vuoto)
     const checkOri = (myMacro: string, myOris: string[], targetMacro: string) => {
-      if (myOris.length === 0) return true; // Non specificato = aperto a tutto
-      if (myMacro === 'NB' || targetMacro === 'NB') return true; // NB è jolly
+      if (!myOris || myOris.length === 0) return true;
+      if (myMacro === 'NB' || targetMacro === 'NB') return true;
       if (myOris.includes('Eterosessuale')) {
         return (myMacro === 'M' && targetMacro === 'F') || (myMacro === 'F' && targetMacro === 'M') || targetMacro === 'TRANS';
       }
       if (myOris.includes('Gay') || myOris.includes('Lesbica')) {
         return myMacro === targetMacro || targetMacro === 'TRANS' || targetMacro === 'NB';
       }
-      return true; // Bisessuale/Pansessuale/etc.
+      return true;
     };
 
     const orisV = viewer.orientation || [];
+    const orisT = target.orientation || [];
     if (!checkOri(macroV, orisV, macroT)) return false;
-
-    // B. FILTRO GENERE UI — raffina ulteriormente i risultati già compatibili
-    // Non può mai mostrare profili che l'orientamento ha già escluso
-    const targetGender = target.gender?.toLowerCase() || '';
-    if (wantsV.length > 0 && !isWildcard(wantsV)) {
-      if (!wantsV.includes(targetGender)) return false;
-    }
+    if (!checkOri(macroT, orisT, macroV)) return false;
 
     return true;
-  });
 
-  const userWantsGender: string[] = (() => {
-    const lfg = currentUser?.looking_for_gender;
-    if (!lfg) return [];
-    if (Array.isArray(lfg)) return lfg;
-    return [lfg as unknown as string];
-  })();
+    return true;
+  }), [profiles, currentUser, searchTerm, filterCity, filterAge, filterBodyType]);
+
+  const availableGenderChips = useMemo(() => {
+    const genders = baseCompatibleProfiles
+      .map(p => p.gender)
+      .filter(Boolean)
+      .map(g => {
+        const s = (g as string).trim();
+        return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+      });
+    const unique = Array.from(new Set(genders)).sort();
+    return unique.length >= 2 ? unique : [];
+  }, [baseCompatibleProfiles]);
+
+  // Final filtered list: apply gender chip on top of base
+  const filteredProfiles = useMemo(() => {
+    if (filterGender === 'Tutti') return baseCompatibleProfiles;
+    return baseCompatibleProfiles.filter(p => {
+      const g = (p.gender || '').trim().charAt(0).toUpperCase() + (p.gender || '').trim().slice(1).toLowerCase();
+      return g === filterGender;
+    });
+  }, [baseCompatibleProfiles, filterGender]);
 
   // Quick reaction on profile cards (one per user)
   const [cardReactions, setCardReactions] = useState<Record<string, 'like' | 'heart' | null>>({});
@@ -2770,7 +2810,21 @@ const BachecaPage = () => {
         </button>
       </div>
 
-      {/* Search input */}
+      {/* ── GENDER CHIPS (solo se ci sono 2+ generi compatibili) ── */}
+      {availableGenderChips.length >= 2 && (
+        <div className="px-4 pb-3 flex items-center gap-2 overflow-x-auto scrollbar-hide">
+          {['Tutti', ...availableGenderChips].map(g => (
+            <button key={g} onClick={() => setFilterGender(g)}
+              className={cn(
+                "px-3 py-1.5 rounded-full text-[12px] font-black whitespace-nowrap transition-all shrink-0 backdrop-blur-sm",
+                filterGender === g
+                  ? "bg-purple-600/90 text-white shadow-lg shadow-purple-600/30"
+                  : "bg-black/20 text-white border border-white/8 hover:border-white/20 hover:text-white/60"
+              )}>{g}</button>
+          ))}
+        </div>
+      )}
+
       <AnimatePresence>
         {showSearch && (
           <motion.div
@@ -2813,39 +2867,6 @@ const BachecaPage = () => {
           >
             <div className="bg-black/25 backdrop-blur-2xl border border-white/8 rounded-[24px] p-4 space-y-4">
               <div className="space-y-2">
-                <p className="text-white text-[11px] font-black uppercase tracking-widest">Genere Cercato</p>
-                <div className="relative">
-                  <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-8 z-10" style={{ background: 'linear-gradient(to right, #0a0a0f, transparent)' }} />
-                  <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 z-10" style={{ background: 'linear-gradient(to left, #0a0a0f, transparent)' }} />
-                  <div className="flex gap-2 overflow-x-auto pb-2 hide-scrollbar px-2" style={{ scrollSnapType: 'x mandatory' }}>
-                    {['Uomo', 'Donna', 'Non-binario', 'Transgender', 'Genderfluid', 'Queer'].map(g => {
-                      const lower = g.toLowerCase();
-                      const isA = selectedGenders.map(s => s.toLowerCase()).includes(lower);
-                      return (
-                        <button
-                          key={g}
-                          onClick={() => {
-                            if (isA) setSelectedGenders(selectedGenders.filter(s => s.toLowerCase() !== lower));
-                            else setSelectedGenders([...selectedGenders, g]);
-                          }}
-                          style={{
-                            scrollSnapAlign: 'center', flexShrink: 0,
-                            ...(isA ? { background: '#f43f5e', boxShadow: '0 0 15px rgba(244,63,94,0.4)', border: '1px solid rgba(244,63,94,0.6)' }
-                              : { background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', opacity: 0.6 })
-                          }}
-                          className={cn(
-                            "px-5 py-2.5 rounded-[18px] text-[12px] font-black tracking-widest uppercase whitespace-nowrap transition-all",
-                            isA ? "text-white scale-105" : "text-white"
-                          )}
-                        >
-                          {g}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-              <div className="space-y-2">
                 <p className="text-white text-[11px] font-black uppercase tracking-widest">Età {filterAge[0]}–{filterAge[1]}</p>
                 <div className="flex gap-3">
                   <input type="range" min="18" max="99" value={filterAge[0]} onChange={e => setFilterAge([+e.target.value, filterAge[1]])} className="flex-1 accent-rose-600" />
@@ -2857,9 +2878,9 @@ const BachecaPage = () => {
                   setFilterCity('Tutte');
                   setFilterAge([18, 99]);
                   setFilterBodyType('Tutte');
+                  setFilterGender('Tutti');
                   setSearchTerm('');
                   setShowSearch(false);
-                  setSelectedGenders((currentUser?.looking_for_gender || []).map((g: any) => typeof g === 'string' ? g.toLowerCase() : ''));
                   setShowAdvanced(false);
                 }}
                 className="text-rose-400 text-[10px] font-black uppercase tracking-widest"
