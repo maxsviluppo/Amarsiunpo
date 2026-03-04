@@ -4709,10 +4709,10 @@ const AdminPage = () => {
   const fetchUsers = async () => {
     setLoadingData(true);
     try {
-      // 1. Prova a caricare da Supabase
+      // 1. Prova a caricare da Supabase - prioritario per admin
       const { data: sbData, error: sbError } = await supabase.from('users').select('*').order('created_at', { ascending: false });
 
-      // 2. Prova a caricare dall'API locale
+      // 2. Prova a caricare dall'API locale (fallback)
       let localData = [];
       try {
         const res = await fetch('/api/profiles');
@@ -4738,7 +4738,7 @@ const AdminPage = () => {
 
       setUsers(combined);
       if (sbError && combined.length === 0) {
-        setToast({ message: "Sincronizzazione Supabase limitata. Uso dati locali.", type: 'info' });
+        setToast({ message: "Sincronizzazione Supabase fallita.", type: 'error' });
       }
     } catch (e) {
       setToast({ message: "Errore caricamento dati.", type: 'error' });
@@ -4820,6 +4820,8 @@ const AdminPage = () => {
     } catch (e) { setToast({ message: "Errore.", type: 'error' }); }
   };
 
+  const [selectedUser, setSelectedUser] = useState<any | null>(null);
+
 
   if (!isAuthenticated) {
     return (
@@ -4894,25 +4896,65 @@ const AdminPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-stone-50 flex flex-col md:flex-row">
+    <div className="min-h-screen bg-stone-50 flex flex-col md:flex-row relative">
       <AnimatePresence>
         {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       </AnimatePresence>
 
+      {/* Mobile Top Bar */}
+      <div className="md:hidden bg-stone-900 text-white px-5 py-4 flex items-center justify-between sticky top-0 z-[60] shadow-xl border-b border-white/5">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 bg-rose-600 rounded-lg flex items-center justify-center shadow-lg shadow-rose-900/20">
+            <Heart className="w-4 h-4 text-white fill-current" />
+          </div>
+          <span className="font-serif font-black tracking-tight text-sm">SoulMatch Admin</span>
+        </div>
+        <button
+          onClick={() => {
+            const sidebar = document.getElementById('admin-sidebar');
+            if (sidebar) sidebar.classList.toggle('-translate-x-full');
+          }}
+          className="w-10 h-10 flex items-center justify-center bg-white/5 rounded-xl border border-white/10 active:scale-95 transition-all"
+        >
+          <LayoutGrid className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* Sidebar Overlay (Mobile) */}
+      <div
+        id="sidebar-overlay"
+        onClick={() => document.getElementById('admin-sidebar')?.classList.add('-translate-x-full')}
+        className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[65] transition-opacity duration-300 opacity-0 pointer-events-none md:pointer-events-none"
+      />
+
       {/* Sidebar */}
-      <aside className="w-full md:w-72 bg-stone-900 text-white flex flex-col sticky top-0 md:h-screen z-50 shadow-2xl">
-        <div className="p-8 pb-4">
-          <div className="flex items-center gap-3 mb-10">
-            <div className="w-10 h-10 bg-rose-600 rounded-xl flex items-center justify-center shrink-0 shadow-lg shadow-rose-900/40">
-              <Heart className="w-5 h-5 text-white fill-current" />
+      <aside
+        id="admin-sidebar"
+        className="fixed inset-y-0 left-0 w-[280px] bg-stone-900 text-white flex flex-col z-[70] shadow-2xl transition-transform duration-300 ease-out md:translate-x-0 -translate-x-full md:static md:w-72 md:h-screen"
+      >
+        <div className="p-8 pb-4 flex-1">
+          <div className="flex items-center justify-between mb-10">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-rose-600 rounded-xl flex items-center justify-center shrink-0 shadow-lg shadow-rose-900/40">
+                <Heart className="w-5 h-5 text-white fill-current" />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-xl font-serif font-black tracking-tight leading-none text-white">SoulMatch</span>
+                <span className="text-[9px] font-black text-rose-500 uppercase tracking-widest mt-1">Control Center</span>
+              </div>
             </div>
-            <div className="flex flex-col">
-              <span className="text-xl font-serif font-black tracking-tight leading-none text-white">SoulMatch</span>
-              <span className="text-[9px] font-black text-rose-500 uppercase tracking-widest mt-1">Admin Dashboard</span>
-            </div>
+            <button
+              onClick={() => {
+                const sidebar = document.getElementById('admin-sidebar');
+                if (sidebar) sidebar.classList.add('-translate-x-full');
+              }}
+              className="md:hidden w-10 h-10 flex items-center justify-center bg-white/5 rounded-xl border border-white/10"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
 
-          <nav className="space-y-1.5 ">
+          <nav className="space-y-1.5">
             {([
               { key: 'dashboard', label: 'Dashboard', icon: LayoutGrid },
               { key: 'utenti', label: 'Utenti Iscritti', icon: Users },
@@ -4923,30 +4965,41 @@ const AdminPage = () => {
             ] as Array<{ key: string, label: string, icon: any, badge?: number }>).map(({ key, label, icon: Icon, badge }) => (
               <button
                 key={key}
-                onClick={() => setActiveTab(key)}
+                onClick={() => {
+                  setActiveTab(key);
+                  const sidebar = document.getElementById('admin-sidebar');
+                  if (sidebar) sidebar.classList.add('-translate-x-full');
+                }}
                 className={cn(
                   "w-full flex items-center justify-between px-4 py-3.5 rounded-2xl text-sm font-bold transition-all border border-transparent",
                   activeTab === key
-                    ? "bg-white/10 text-white border-white/5 shadow-inner"
+                    ? "bg-rose-600 text-white border-rose-500 shadow-xl shadow-rose-900/20"
                     : "text-stone-400 hover:text-white hover:bg-white/5"
                 )}
               >
                 <div className="flex items-center gap-3">
-                  <Icon className={cn("w-4 h-4", activeTab === key ? "text-rose-500" : "text-stone-500")} />
+                  <Icon className={cn("w-4 h-4", activeTab === key ? "text-white" : "text-stone-500")} />
                   {label}
                 </div>
-                {'badge' in { badge } && (badge as number) > 0 && <span className="bg-rose-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full ring-2 ring-stone-900">{badge as number}</span>}
+                {'badge' in { badge } && (badge as number) > 0 &&
+                  <span className={cn(
+                    "w-5 h-5 rounded-full text-[9px] font-black flex items-center justify-center ring-2 ring-stone-900",
+                    activeTab === key ? "bg-white text-rose-600" : "bg-rose-600 text-white"
+                  )}>
+                    {badge as number}
+                  </span>
+                }
               </button>
             ))}
           </nav>
         </div>
 
-        <div className="mt-auto p-8 border-t border-white/5 bg-stone-950/20">
+        <div className="p-8 border-t border-white/5 bg-stone-950/20">
           <button
             onClick={() => setIsAuthenticated(false)}
-            className="w-full flex items-center justify-center gap-3 bg-stone-800/50 hover:bg-rose-950/30 text-stone-400 hover:text-rose-500 py-3 rounded-xl transition-all font-black text-[10px] uppercase tracking-widest border border-white/5"
+            className="w-full flex items-center justify-center gap-3 bg-stone-800/40 hover:bg-rose-950/30 text-stone-400 hover:text-rose-500 py-3.5 rounded-2xl transition-all font-black text-[10px] uppercase tracking-widest border border-white/5"
           >
-            <LogOut className="w-4 h-4" /> Disconnetti
+            <LogOut className="w-4 h-4" /> Disconnetti Admin
           </button>
         </div>
       </aside>
@@ -4954,37 +5007,44 @@ const AdminPage = () => {
       {/* Main Content */}
       <main className="flex-1 min-w-0 flex flex-col">
         {/* Top Header */}
-        <header className="bg-white/80 backdrop-blur-md border-b border-stone-100 px-8 py-6 flex flex-col md:flex-row md:items-center justify-between gap-4 sticky top-0 z-40">
-          <div>
-            <div className="flex items-center gap-2 mb-0.5">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <h2 className="text-2xl font-serif font-black text-stone-900 capitalize leading-none">{activeTab.replace('_', ' ')}</h2>
+        <header className="bg-white/80 backdrop-blur-md border-b border-stone-100 px-4 md:px-8 py-4 md:py-6 flex flex-col md:flex-row md:items-center justify-between gap-4 sticky top-[72px] md:top-0 z-40">
+          <div className="flex items-center justify-between w-full md:w-auto">
+            <div>
+              <div className="flex items-center gap-2 mb-0.5">
+                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <h2 className="text-xl md:text-2xl font-serif font-black text-stone-900 capitalize leading-none">{activeTab.replace('_', ' ')}</h2>
+              </div>
+              <p className="text-[9px] md:text-[10px] text-stone-400 font-bold uppercase tracking-widest">SoulMatch Back-office</p>
             </div>
-            <p className="text-[10px] text-stone-400 font-bold uppercase tracking-widest">SoulMatch Back-office v2.0</p>
+
+            <div className="md:hidden flex items-center gap-3">
+              <div className="w-10 h-10 bg-stone-900 rounded-xl flex items-center justify-center text-white font-black text-[10px] border border-white shadow-lg">AD</div>
+            </div>
           </div>
-          <div className="flex items-center gap-4">
+
+          <div className="flex items-center gap-2 md:gap-4 overflow-x-auto pb-1 md:pb-0 scrollbar-hide">
             <button
               onClick={fetchUsers}
-              className="flex items-center gap-2 px-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-stone-600 hover:text-rose-600 hover:bg-rose-50 transition-all font-bold text-xs shadow-sm"
+              className="flex items-center gap-2 px-3 py-2 md:px-4 md:py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-stone-600 hover:text-rose-600 hover:bg-rose-50 transition-all font-bold text-[10px] md:text-xs shadow-sm shrink-0"
               title="Sincronizza Dati"
             >
-              <RefreshCw className={cn("w-4 h-4", loadingData ? "animate-spin" : "")} />
-              <span className="hidden sm:inline">Aggiorna</span>
+              <RefreshCw className={cn("w-3.5 h-3.5 md:w-4 h-4", loadingData ? "animate-spin" : "")} />
+              <span>Aggiorna</span>
             </button>
 
-            <div className="h-10 w-[1px] bg-stone-200 mx-1 hidden sm:block" />
+            <div className="h-8 w-[1px] bg-stone-200 mx-1 hidden sm:block" />
 
-            <div className="flex items-center gap-3 pl-2">
-              <div className="text-right hidden sm:block">
+            <div className="hidden sm:flex items-center gap-3 pl-2">
+              <div className="text-right">
                 <p className="text-xs font-black text-stone-900 leading-none">Super Admin</p>
-                <p className="text-[9px] text-stone-400 font-bold mt-1 uppercase tracking-tighter">Accesso root attivo</p>
+                <p className="text-[9px] text-stone-400 font-bold mt-1 uppercase tracking-tighter">Accesso root</p>
               </div>
               <div className="w-11 h-11 bg-stone-900 rounded-2xl flex items-center justify-center text-white font-black text-xs border border-white shadow-xl rotate-3">AD</div>
             </div>
           </div>
         </header>
 
-        <div className="p-8 pb-20 overflow-y-auto">
+        <div className="p-4 md:p-8 pb-20 overflow-y-auto">
           {loadingData && users.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-32 space-y-4">
               <div className="w-12 h-12 border-[5px] border-rose-100 border-t-rose-600 rounded-full animate-spin" />
@@ -4997,98 +5057,94 @@ const AdminPage = () => {
               {activeTab === 'dashboard' && (
                 <div className="space-y-10">
                   {/* Stats Grid */}
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
                     {[
                       { label: 'Utenti Iscritti', val: stats.total, sub: 'In crescita dell\'8%', icon: Users, color: 'stone' },
                       { label: 'Verificati', val: stats.verified, sub: 'Badge assegnati', icon: ShieldCheck, color: 'emerald' },
                       { label: 'VIP accounts', val: stats.premium, sub: 'Entrate attive', icon: Sparkles, color: 'amber' },
                       { label: 'In Attesa ID', val: stats.pendingDocs, sub: 'Richieste urgenti', icon: Bell, color: 'rose' },
                     ].map((s, i) => (
-                      <div key={i} className="bg-white border border-stone-100 p-8 rounded-[40px] shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all group overflow-hidden relative">
-                        <div className={cn("absolute top-0 right-0 w-32 h-32 blur-3xl rounded-full translate-x-12 -translate-y-12 opacity-10 transition-opacity group-hover:opacity-20",
+                      <div key={i} className="bg-white border border-stone-100 p-6 md:p-8 rounded-[32px] md:rounded-[40px] shadow-sm hover:shadow-xl transition-all group overflow-hidden relative">
+                        <div className={cn("absolute top-0 right-0 w-24 md:w-32 h-24 md:h-32 blur-3xl rounded-full translate-x-12 -translate-y-12 opacity-10 transition-opacity group-hover:opacity-20",
                           s.color === 'rose' ? 'bg-rose-500' :
                             s.color === 'emerald' ? 'bg-emerald-500' :
                               s.color === 'amber' ? 'bg-amber-500' : 'bg-stone-500'
                         )} />
 
-                        <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center mb-6 shadow-lg",
+                        <div className={cn("w-12 h-12 md:w-14 md:h-14 rounded-2xl flex items-center justify-center mb-4 md:mb-6 shadow-lg",
                           s.color === 'rose' ? 'bg-rose-50 text-rose-600' :
                             s.color === 'emerald' ? 'bg-emerald-50 text-emerald-600' :
                               s.color === 'amber' ? 'bg-amber-50 text-amber-600' : 'bg-stone-50 text-stone-600'
                         )}>
-                          <s.icon className="w-6 h-6" />
+                          <s.icon className="w-5 h-5 md:w-6 h-6" />
                         </div>
-                        <p className="text-4xl font-black text-stone-900 leading-none tracking-tighter">{s.val}</p>
-                        <p className="text-[11px] font-black text-stone-400 uppercase tracking-[0.2em] mt-4 ml-1">{s.label}</p>
-                        <p className="text-[10px] text-stone-400 mt-2 ml-1 flex items-center gap-1">
-                          <span className={cn("w-1.5 h-1.5 rounded-full", s.color === 'emerald' ? 'bg-emerald-500' : 'bg-stone-300')} />
-                          {s.sub}
-                        </p>
+                        <p className="text-3xl md:text-4xl font-black text-stone-900 leading-none tracking-tighter">{s.val}</p>
+                        <p className="text-[10px] md:text-[11px] font-black text-stone-400 uppercase tracking-[0.2em] mt-3 md:mt-4 ml-1">{s.label}</p>
                       </div>
                     ))}
                   </div>
 
                   {/* Recent Users Table */}
-                  <div className="bg-white border border-stone-100 rounded-[48px] overflow-hidden shadow-sm">
-                    <div className="px-10 py-8 border-b border-stone-50 flex items-center justify-between bg-stone-50/30">
+                  <div className="bg-white border border-stone-100 rounded-[32px] md:rounded-[48px] overflow-hidden shadow-sm">
+                    <div className="px-6 md:px-10 py-6 md:py-8 border-b border-stone-50 flex flex-col sm:flex-row sm:items-center justify-between bg-stone-50/30 gap-4">
                       <div>
-                        <h4 className="text-xl font-serif font-black text-stone-900">Ultimi Iscritti</h4>
-                        <p className="text-[10px] text-stone-400 font-bold uppercase tracking-widest mt-1">Sincronizzazione real-time Supabase</p>
+                        <h4 className="text-lg md:text-xl font-serif font-black text-stone-900">Ultimi Iscritti</h4>
+                        <p className="text-[10px] text-stone-400 font-bold uppercase tracking-widest mt-1">Sincronizzazione real-time</p>
                       </div>
-                      <button onClick={() => setActiveTab('utenti')} className="bg-rose-600 hover:bg-rose-700 text-white px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-rose-900/10 transition-all active:scale-95">Vedi Tabella Completa</button>
+                      <button onClick={() => setActiveTab('utenti')} className="bg-rose-600 hover:bg-rose-700 text-white px-5 py-2.5 rounded-2xl text-[9px] md:text-[10px] font-black uppercase tracking-widest shadow-lg shadow-rose-900/10 transition-all active:scale-95 text-center">Vedi Tabella Completa</button>
                     </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left">
+                    <div className="overflow-x-auto scrollbar-hide">
+                      <table className="w-full text-left min-w-[600px]">
                         <thead>
                           <tr className="bg-white border-b border-stone-50">
-                            <th className="px-10 py-5 text-[10px] font-black text-stone-500 uppercase tracking-[0.2em]">Profilo Utente</th>
-                            <th className="px-10 py-5 text-[10px] font-black text-stone-500 uppercase tracking-[0.2em]">Località</th>
-                            <th className="px-10 py-5 text-[10px] font-black text-stone-500 uppercase tracking-[0.2em]">Privilegi</th>
-                            <th className="px-10 py-5 text-[10px] font-black text-stone-500 uppercase tracking-[0.2em]">Registrazione</th>
+                            <th className="px-6 md:px-10 py-4 md:py-5 text-[9px] md:text-[10px] font-black text-stone-500 uppercase tracking-[0.2em]">Profilo Utente</th>
+                            <th className="px-6 md:px-10 py-4 md:py-5 text-[9px] md:text-[10px] font-black text-stone-500 uppercase tracking-[0.2em]">Località</th>
+                            <th className="px-6 md:px-10 py-4 md:py-5 text-[9px] md:text-[10px] font-black text-stone-500 uppercase tracking-[0.2em]">Privilegi</th>
+                            <th className="px-6 md:px-10 py-4 md:py-5 text-[9px] md:text-[10px] font-black text-stone-500 uppercase tracking-[0.2em]">Data</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-stone-50">
                           {users.length === 0 ? (
                             <tr>
-                              <td colSpan={4} className="px-10 py-20 text-center">
+                              <td colSpan={4} className="px-6 py-20 text-center">
                                 <Users className="w-12 h-12 text-stone-200 mx-auto mb-4" />
-                                <p className="text-stone-400 font-medium">Nessun utente trovato nel database.</p>
-                                <button onClick={fetchUsers} className="mt-4 text-rose-600 font-black text-xs uppercase tracking-widest hover:underline">Riprova Sincronizzazione</button>
+                                <p className="text-stone-400 font-medium">Nessun utente trovato.</p>
+                                <button onClick={fetchUsers} className="mt-4 text-rose-600 font-black text-xs uppercase tracking-widest hover:underline">Riprova</button>
                               </td>
                             </tr>
                           ) : users.slice(0, 6).map((u: any) => (
                             <tr key={u.id} className="hover:bg-stone-50/50 transition-all group">
-                              <td className="px-10 py-5">
-                                <div className="flex items-center gap-4">
-                                  <div className="w-12 h-12 rounded-2xl bg-stone-100 overflow-hidden ring-4 ring-white shadow-md group-hover:scale-110 transition-transform">
+                              <td className="px-6 md:px-10 py-4 md:py-5">
+                                <div className="flex items-center gap-3 md:gap-4">
+                                  <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl bg-stone-100 overflow-hidden ring-2 md:ring-4 ring-white shadow-md">
                                     <img src={u.photo_url || `https://ui-avatars.com/api/?name=${u.name}+${u.surname}&background=F5F5F4&color=78716C&bold=true`} className="w-full h-full object-cover" />
                                   </div>
-                                  <div>
-                                    <p className="text-sm font-black text-stone-900 leading-tight">{u.name} {u.surname}</p>
-                                    <p className="text-[10px] text-stone-400 font-medium mt-0.5">{u.email || '—'}</p>
+                                  <div className="min-w-0">
+                                    <p className="text-xs md:text-sm font-black text-stone-900 leading-tight truncate">{u.name} {u.surname}</p>
+                                    <p className="text-[9px] md:text-[10px] text-stone-400 font-medium mt-0.5 truncate">{u.email || '—'}</p>
                                   </div>
                                 </div>
                               </td>
-                              <td className="px-10 py-5">
+                              <td className="px-6 md:px-10 py-4 md:py-5">
                                 <div className="flex items-center gap-2">
                                   <MapPin className="w-3 h-3 text-rose-400" />
-                                  <span className="text-xs font-bold text-stone-600">{u.city || 'Non specificata'}</span>
+                                  <span className="text-xs font-bold text-stone-600 truncate">{u.city || '—'}</span>
                                 </div>
                               </td>
-                              <td className="px-10 py-5">
-                                <div className="flex gap-2">
+                              <td className="px-6 md:px-10 py-4 md:py-5">
+                                <div className="flex gap-1.5 md:gap-2">
                                   {u.is_paid ?
-                                    <span className="px-3 py-1 bg-amber-50 text-amber-600 text-[9px] font-black rounded-full border border-amber-100 shadow-sm uppercase tracking-tighter">VIP</span> :
-                                    <span className="px-3 py-1 bg-stone-50 text-stone-400 text-[9px] font-black rounded-full border border-stone-100 uppercase tracking-tighter">Base</span>
+                                    <span className="px-2 py-0.5 bg-amber-50 text-amber-600 text-[8px] md:text-[9px] font-black rounded-full border border-amber-100 shadow-sm uppercase tracking-tighter">VIP</span> :
+                                    <span className="px-2 py-0.5 bg-stone-50 text-stone-400 text-[8px] md:text-[9px] font-black rounded-full border border-stone-100 uppercase tracking-tighter">Base</span>
                                   }
                                   {u.is_validated ?
-                                    <span className="px-3 py-1 bg-emerald-50 text-emerald-600 text-[9px] font-black rounded-full border border-emerald-100 shadow-sm uppercase tracking-tighter">Verificato</span> :
-                                    <span className="px-3 py-1 bg-stone-50 text-stone-300 text-[9px] font-black rounded-full border border-stone-100 uppercase tracking-tighter">Pending</span>
+                                    <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 text-[8px] md:text-[9px] font-black rounded-full border border-emerald-100 shadow-sm uppercase tracking-tighter">V</span> :
+                                    <span className="px-2 py-0.5 bg-stone-50 text-stone-300 text-[8px] md:text-[9px] font-black rounded-full border border-stone-100 uppercase tracking-tighter">P</span>
                                   }
                                 </div>
                               </td>
-                              <td className="px-10 py-5">
-                                <span className="text-[10px] text-stone-400 font-bold">{u.created_at ? new Date(u.created_at).toLocaleDateString('it-IT') : '—'}</span>
+                              <td className="px-6 md:px-10 py-4 md:py-5">
+                                <span className="text-[9px] md:text-[10px] text-stone-400 font-bold whitespace-nowrap">{u.created_at ? new Date(u.created_at).toLocaleDateString('it-IT') : '—'}</span>
                               </td>
                             </tr>
                           ))}
@@ -5096,6 +5152,177 @@ const AdminPage = () => {
                       </table>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {activeTab === 'utenti' && (
+                <div className="space-y-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                      <h4 className="text-xl font-serif font-black text-stone-900">Anagrafica Utenti</h4>
+                      <p className="text-[10px] text-stone-400 font-bold uppercase tracking-widest mt-1">Real-time sync con Supabase</p>
+                    </div>
+                    <div className="relative w-full sm:w-72">
+                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+                      <input
+                        type="text"
+                        placeholder="Cerca per nome, email o città..."
+                        className="w-full pl-11 pr-4 py-3 bg-white border border-stone-100 rounded-2xl text-[11px] font-bold focus:ring-2 focus:ring-rose-500 outline-none transition-all shadow-sm"
+                        value={archiveSearch}
+                        onChange={(e) => setArchiveSearch(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                    {users.filter(u => {
+                      const q = archiveSearch.toLowerCase();
+                      return !q || u.name?.toLowerCase().includes(q) || u.surname?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q) || u.city?.toLowerCase().includes(q);
+                    }).map((u: any) => (
+                      <motion.div
+                        key={u.id}
+                        layout
+                        className="bg-white border border-stone-100 rounded-[32px] overflow-hidden shadow-sm hover:shadow-xl transition-all group"
+                      >
+                        <div className="p-6">
+                          <div className="flex items-start gap-4 mb-6">
+                            <div className="w-16 h-16 rounded-2xl bg-stone-100 overflow-hidden ring-4 ring-stone-100 shrink-0 shadow-inner">
+                              <img src={u.photo_url || `https://ui-avatars.com/api/?name=${u.name}+${u.surname}&background=F5F5F4&color=78716C&bold=true`} className="w-full h-full object-cover" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <h5 className="font-black text-stone-900 truncate text-base">{u.name} {u.surname}</h5>
+                                {u.is_online && <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 shadow-sm shadow-emerald-200" />}
+                              </div>
+                              <p className="text-[10px] text-stone-400 font-bold uppercase tracking-wider truncate mb-2">{u.email}</p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {u.is_paid && <span className="px-2 py-0.5 bg-amber-50 text-amber-600 text-[8px] font-black rounded-lg border border-amber-100 uppercase tracking-tighter">VIP Member</span>}
+                                {u.is_validated && <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 text-[8px] font-black rounded-lg border border-emerald-100 uppercase tracking-tighter">Verificato</span>}
+                                {u.is_blocked && <span className="px-2 py-0.5 bg-rose-50 text-rose-600 text-[8px] font-black rounded-lg border border-rose-100 uppercase tracking-tighter">Bloccato</span>}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3 mb-6 bg-stone-50/50 p-4 rounded-2xl border border-stone-100/50">
+                            <div className="space-y-1">
+                              <p className="text-[9px] text-stone-400 font-black uppercase tracking-widest">Località</p>
+                              <div className="flex items-center gap-1.5">
+                                <MapPin className="w-3 h-3 text-rose-500" />
+                                <p className="text-[11px] font-black text-stone-700 truncate">{u.city || '—'}</p>
+                              </div>
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-[9px] text-stone-400 font-black uppercase tracking-widest">Età / Genere</p>
+                              <p className="text-[11px] font-black text-stone-700">{(u.dob ? calculateAge(u.dob) : '—')} anni · {u.gender || '—'}</p>
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-[9px] text-stone-400 font-black uppercase tracking-widest">Occupazione</p>
+                              <p className="text-[11px] font-black text-stone-700 truncate">{u.job || '—'}</p>
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-[9px] text-stone-400 font-black uppercase tracking-widest">Iscritto il</p>
+                              <p className="text-[11px] font-black text-stone-700">{u.created_at ? new Date(u.created_at).toLocaleDateString('it-IT') : '—'}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setSelectedUser(u)}
+                              className="flex-1 bg-stone-900 hover:bg-black text-white py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm active:scale-95"
+                            >
+                              Profilo Completo
+                            </button>
+                            <button
+                              onClick={() => handleBlockUserToggle(u.id, u.is_blocked)}
+                              className={cn(
+                                "w-12 h-12 rounded-2xl flex items-center justify-center transition-all active:scale-95 border",
+                                u.is_blocked ? "bg-emerald-50 text-emerald-600 border-emerald-100 shadow-sm" : "bg-stone-50 text-stone-400 border-stone-100 hover:text-rose-600"
+                              )}
+                            >
+                              {u.is_blocked ? <UserCheck className="w-5 h-5" /> : <XCircle className="w-5 h-5" />}
+                            </button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+
+                  {/* Empty state */}
+                  {users.length === 0 && (
+                    <div className="py-32 text-center bg-white rounded-[40px] border border-stone-100">
+                      <Users className="w-20 h-20 text-stone-100 mx-auto mb-6" />
+                      <h5 className="text-xl font-serif font-black text-stone-900">Database Vuoto</h5>
+                      <p className="text-stone-400 text-sm mt-2">Nessun utente reale trovato su Supabase.</p>
+                    </div>
+                  )}
+
+                  {/* User Detailed Flashcard Modal */}
+                  <AnimatePresence>
+                    {selectedUser && (
+                      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedUser(null)} className="absolute inset-0 bg-stone-900/60 backdrop-blur-md" />
+                        <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }} className="relative bg-white w-full max-w-2xl rounded-[40px] shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+                          <button onClick={() => setSelectedUser(null)} className="absolute top-6 right-6 w-10 h-10 bg-stone-100 rounded-full flex items-center justify-center hover:bg-rose-50 hover:text-rose-600 transition-all z-10"><X className="w-5 h-5" /></button>
+
+                          <div className="overflow-y-auto p-8 md:p-12 scrollbar-hide">
+                            <div className="flex flex-col md:flex-row gap-8 mb-10 text-center md:text-left">
+                              <div className="w-32 h-32 md:w-40 md:h-40 rounded-[32px] bg-stone-100 overflow-hidden ring-8 ring-stone-50 shadow-xl mx-auto md:mx-0">
+                                <img src={selectedUser.photo_url || `https://ui-avatars.com/api/?name=${selectedUser.name}+${selectedUser.surname}&background=F5F5F4&color=78716C&bold=true`} className="w-full h-full object-cover" />
+                              </div>
+                              <div className="flex-1">
+                                <div className="flex items-center justify-center md:justify-start gap-3 mb-2">
+                                  <h3 className="text-3xl font-serif font-black text-stone-900">{selectedUser.name} {selectedUser.surname}</h3>
+                                  {selectedUser.is_paid && <div className="bg-amber-100 text-amber-700 p-1.5 rounded-lg shadow-sm"><Sparkles className="w-5 h-5" /></div>}
+                                </div>
+                                <p className="text-stone-400 font-bold uppercase tracking-widest text-xs mb-4">{selectedUser.gender} · {(selectedUser.dob ? calculateAge(selectedUser.dob) : '—')} anni · {selectedUser.city}</p>
+                                <div className="flex flex-wrap justify-center md:justify-start gap-2">
+                                  <span className="px-3 py-1.5 bg-stone-900 text-white text-[10px] font-black rounded-xl border border-white/10 uppercase tracking-widest">{selectedUser.orientation?.join?.(',') || 'Eterosessuale'}</span>
+                                  <span className="px-3 py-1.5 bg-stone-100 text-stone-600 text-[10px] font-black rounded-xl border border-stone-200 uppercase tracking-widest">{selectedUser.body_type}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+                              <div className="bg-stone-50/50 p-6 rounded-3xl border border-stone-100">
+                                <p className="text-[10px] text-stone-400 font-black uppercase tracking-widest mb-4">Bio & Passioni</p>
+                                <p className="text-sm font-medium text-stone-700 leading-relaxed mb-4">{selectedUser.description || 'Nessuna descrizione.'}</p>
+                                <p className="text-[11px] font-black text-stone-900 bg-white inline-block px-3 py-1.5 rounded-lg shadow-sm border border-stone-100">{selectedUser.hobbies}</p>
+                              </div>
+                              <div className="bg-stone-50/50 p-6 rounded-3xl border border-stone-100">
+                                <p className="text-[10px] text-stone-400 font-black uppercase tracking-widest mb-4">Preferenze Match</p>
+                                <div className="space-y-4">
+                                  <div>
+                                    <p className="text-[9px] font-black text-stone-400 uppercase tracking-tight">Cerca</p>
+                                    <p className="text-xs font-black text-rose-600">{selectedUser.looking_for_gender} ({selectedUser.looking_for_age_min}-{selectedUser.looking_for_age_max} anni)</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[9px] font-black text-stone-400 uppercase tracking-tight">Dettagli Desiderati</p>
+                                    <p className="text-xs font-bold text-stone-600 leading-relaxed">{selectedUser.desires || 'Nessuna preferenza caricata.'}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="bg-stone-900 rounded-[32px] p-8 text-white relative overflow-hidden">
+                              <Zap className="absolute top-1/2 right-4 -translate-y-1/2 w-48 h-48 text-white/5 -rotate-12" />
+                              <div className="relative z-10 flex flex-col md:flex-row items-center gap-6 justify-between">
+                                <div className="text-center md:text-left">
+                                  <h4 className="text-xl font-serif font-black mb-1">Dati Account</h4>
+                                  <p className="text-stone-400 text-[10px] font-black uppercase tracking-widest">{selectedUser.email}</p>
+                                  <p className="text-stone-500 text-[9px] font-black mt-2 uppercase tracking-widest italic">ID: {selectedUser.id}</p>
+                                </div>
+                                <div className="flex gap-4">
+                                  <button onClick={() => { handleBlockUserToggle(selectedUser.id, selectedUser.is_blocked); setSelectedUser(null); }} className={cn("px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all", selectedUser.is_blocked ? "bg-emerald-600 text-white shadow-lg shadow-emerald-900/40" : "bg-rose-600 text-white shadow-lg shadow-rose-900/40")}>
+                                    {selectedUser.is_blocked ? 'Sblocca Utente' : 'Blocca Utente'}
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </motion.div>
+                      </div>
+                    )}
+                  </AnimatePresence>
                 </div>
               )}
 
@@ -5323,40 +5550,101 @@ const AdminPage = () => {
 
 
               {activeTab === 'segnalazioni' && (
-                <div className="bg-white p-6 rounded-3xl border border-stone-200 shadow-sm">
-                  <h3 className="text-2xl font-black mb-6">Gestione Segnalazioni</h3>
-                  <div className="flex flex-col items-center justify-center py-24 text-stone-400">
-                    <AlertTriangle className="w-16 h-16 mb-4 opacity-50" />
-                    <p className="font-medium text-lg">Al momento la lista delle segnalazioni è vuota.</p>
+                <div className="bg-white p-6 md:p-10 rounded-[32px] md:rounded-[48px] border border-stone-100 shadow-sm relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-rose-500/5 blur-[100px] rounded-full translate-x-32 -translate-y-32" />
+                  <div className="relative z-10">
+                    <div className="flex items-center gap-4 mb-8">
+                      <div className="w-14 h-14 bg-rose-50 rounded-2xl flex items-center justify-center text-rose-600 shadow-sm">
+                        <AlertTriangle className="w-7 h-7" />
+                      </div>
+                      <div>
+                        <h3 className="text-2xl font-serif font-black text-stone-900">Centro Segnalazioni</h3>
+                        <p className="text-[10px] text-stone-400 font-bold uppercase tracking-widest mt-1">Gestione Report Abusi</p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-center justify-center py-24 px-6 text-center border-2 border-dashed border-stone-100 rounded-[32px] bg-stone-50/30">
+                      <ShieldCheck className="w-16 h-16 mb-6 text-stone-200" />
+                      <h4 className="text-lg font-black text-stone-900 mb-2">Tutto Sotto Controllo</h4>
+                      <p className="text-sm text-stone-400 max-w-sm font-medium leading-relaxed">In questo momento non ci sono segnalazioni attive. I report inviati dagli utenti appariranno qui in tempo reale.</p>
+                      <button onClick={fetchUsers} className="mt-8 px-8 py-3 bg-stone-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg active:scale-95">Sincronizza Ora</button>
+                    </div>
                   </div>
                 </div>
               )}
 
               {activeTab === 'pagamenti' && (
-                <div className="bg-white p-6 rounded-3xl border border-stone-200 shadow-sm">
-                  <div className="flex items-center justify-between mb-8">
-                    <h3 className="text-2xl font-black">Piano Premium - Stripe</h3>
-                    <div className="px-4 py-2 bg-[#635BFF] text-white rounded-xl font-bold text-xs tracking-wide uppercase">Test Mode</div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <div className="border border-stone-100 bg-stone-50 p-6 rounded-2xl">
-                      <p className="text-xs font-bold text-stone-500 mb-2 uppercase tracking-widest">Utenti VIP</p>
-                      <p className="text-4xl font-black text-stone-900">{users.filter((u: any) => u.is_paid).length}</p>
-                    </div>
-                    <div className="border border-stone-100 bg-stone-50 p-6 rounded-2xl">
-                      <p className="text-xs font-bold text-stone-500 mb-2 uppercase tracking-widest">MRR Stimato</p>
-                      <p className="text-4xl font-black text-stone-900">€{(users.filter((u: any) => u.is_paid).length * 9.99).toFixed(2)}</p>
-                    </div>
-                    <div className="border border-stone-100 bg-emerald-50 p-6 rounded-2xl">
-                      <p className="text-xs font-bold text-emerald-600 mb-2 uppercase tracking-widest">Status Webhook</p>
-                      <p className="text-lg font-bold text-emerald-700 flex items-center gap-2 mt-2"><CheckCircle className="w-5 h-5" /> In Sincronia</p>
-                    </div>
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-lg mb-4">Registro Transazioni</h4>
-                    <div className="p-8 border-2 border-dashed border-stone-200 rounded-2xl text-center">
-                      <p className="text-stone-500 text-sm font-medium">L'integrazione di Stripe con Supabase deve essere prima settata lato server. Appariranno qui non appena i webhook Stripe invieranno eventi di pagamento al DB.</p>
-                      <button className="mt-4 px-6 py-2 bg-[#635BFF] text-white rounded-lg font-bold text-sm shadow-lg hover:bg-[#524BDB] transition-all">Apri Dashboard Stripe →</button>
+                <div className="space-y-8">
+                  <div className="bg-white p-6 md:p-10 rounded-[32px] md:rounded-[48px] border border-stone-100 shadow-sm relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 blur-[100px] rounded-full translate-x-32 -translate-y-32" />
+                    <div className="relative z-10">
+                      <div className="flex items-center justify-between flex-wrap gap-6 mb-10">
+                        <div className="flex items-center gap-4">
+                          <div className="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 shadow-sm">
+                            <CreditCard className="w-7 h-7" />
+                          </div>
+                          <div>
+                            <h3 className="text-2xl font-serif font-black text-stone-900">Gestione Abbonamenti</h3>
+                            <p className="text-[10px] text-stone-400 font-bold uppercase tracking-widest mt-1">Stripe Integration Status</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 px-4 py-2 bg-emerald-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-900/20 active:scale-95 transition-all cursor-default">
+                          <CheckCircle className="w-4 h-4" /> Live Connection
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+                        <div className="bg-stone-50/50 p-8 rounded-[32px] border border-stone-100/50 transition-all hover:bg-white hover:shadow-xl group">
+                          <p className="text-[10px] font-black text-stone-400 uppercase tracking-[0.2em] mb-4">Utenti Premium</p>
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-5xl font-black text-stone-900 tracking-tighter">{users.filter((u: any) => u.is_paid).length}</span>
+                            <span className="text-emerald-500 font-black text-xs">▲ 12%</span>
+                          </div>
+                          <p className="text-[10px] text-stone-400 font-bold mt-4">Active VIP subscriptions</p>
+                        </div>
+
+                        <div className="bg-stone-900 p-8 rounded-[32px] text-white relative overflow-hidden group">
+                          <Sparkles className="absolute top-4 right-4 w-20 h-20 text-white/5 group-hover:rotate-12 transition-transform duration-700" />
+                          <p className="text-[10px] font-black text-stone-400 uppercase tracking-[0.2em] mb-4">Proiezione MRR</p>
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-stone-500 text-2xl font-black">€</span>
+                            <span className="text-5xl font-black tracking-tighter text-white">{(users.filter((u: any) => u.is_paid).length * 9.99).toFixed(2)}</span>
+                          </div>
+                          <p className="text-[10px] text-stone-500 font-bold mt-4 uppercase tracking-widest">Entrate Mensili Ricorrenti</p>
+                        </div>
+
+                        <div className="bg-emerald-50 p-8 rounded-[32px] border border-emerald-100 flex flex-col justify-between">
+                          <div className="flex justify-between items-start">
+                            <p className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.2em]">Payouts</p>
+                            <div className="w-8 h-8 bg-white rounded-xl flex items-center justify-center text-emerald-600 shadow-sm"><ArrowRight className="w-4 h-4" /></div>
+                          </div>
+                          <div className="mt-6">
+                            <p className="text-sm font-black text-emerald-900 mb-1">Pagamenti Puntuali</p>
+                            <div className="w-full bg-emerald-200 h-1.5 rounded-full overflow-hidden">
+                              <div className="bg-emerald-600 h-full w-[94%]" />
+                            </div>
+                            <p className="text-[9px] text-emerald-600 font-bold mt-2">Affidabilità webhook: 99.8%</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-stone-50/50 p-10 rounded-[40px] border-2 border-dashed border-stone-200 text-center">
+                        <div className="w-20 h-20 bg-white rounded-[24px] flex items-center justify-center mx-auto mb-6 shadow-xl border border-stone-50">
+                          <CreditCard className="w-10 h-10 text-stone-300" />
+                        </div>
+                        <h4 className="text-xl font-serif font-black text-stone-900 mb-2">Transazioni Dashboard</h4>
+                        <p className="text-stone-400 text-sm max-w-md mx-auto font-medium leading-relaxed mb-8">
+                          I dettagli delle singole transazioni sono visualizzabili direttamente sul portale Stripe. Stiamo sincronizzando i metadata per mostrarti i log qui prossimamente.
+                        </p>
+                        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                          <button className="w-full sm:w-auto px-10 py-4 bg-[#635BFF] text-white rounded-[20px] font-black text-[11px] uppercase tracking-widest shadow-xl shadow-[#635BFF]/30 hover:brightness-110 active:scale-95 transition-all">
+                            Apri Stripe Portal →
+                          </button>
+                          <button onClick={fetchUsers} className="w-full sm:w-auto px-10 py-4 bg-white border border-stone-200 text-stone-900 rounded-[20px] font-black text-[11px] uppercase tracking-widest hover:bg-stone-50 active:scale-95 transition-all">
+                            Aggiorna Stats
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>

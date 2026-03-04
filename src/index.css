@@ -7,6 +7,17 @@
   --font-montserrat: "Montserrat", sans-serif;
 }
 
+@layer utilities {
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
 html,
 body {
   background-color: #000000;
@@ -40,14 +51,6 @@ body {
   padding-right: env(safe-area-inset-right);
 }
 
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
-}
-
-.scrollbar-hide {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
 
 /* Alias used by horizontal tag carousels */
 .hide-scrollbar::-webkit-scrollbar {
