@@ -1523,7 +1523,7 @@ const LiveChatPage = () => {
   };
 
   const handleClose = () => {
-    navigate('/chat', { state: { activeTab: 'live' } });
+    navigate('/chat', { state: { activeTab: 'messaggi' } });
   };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-stone-50"><Sparkles className="w-8 h-8 text-rose-600 animate-pulse" /></div>;
@@ -1703,11 +1703,13 @@ const ProfileDetailPage = () => {
   const [chatStatus, setChatStatus] = useState<'none' | 'pending' | 'approved' | 'rejected'>('none');
   const [userInteractions, setUserInteractions] = useState<string[]>([]);
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' | 'info' } | null>(null);
-  const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
-  const [messageText, setMessageText] = useState('');
   const [soulLinkStatus, setSoulLinkStatus] = useState<'none' | 'pending_sent' | 'pending_received' | 'accepted' | 'rejected'>('none');
   const [soulLinkId, setSoulLinkId] = useState<string | null>(null);
   const [heroIndex, setHeroIndex] = useState(0);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [reportReason, setReportReason] = useState('');
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
+  const [zoomedImage, setZoomedImage] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const fetchInteractionState = async (currentUserId: string) => {
@@ -1717,6 +1719,29 @@ const ProfileDetailPage = () => {
       .eq('from_user_id', currentUserId)
       .eq('to_user_id', id);
     if (data) setUserInteractions(data.map(i => i.type));
+  };
+
+  const handleReportUser = async () => {
+    if (!currentUser || !profile) return;
+    setIsSubmittingReport(true);
+    try {
+      const { error } = await supabase.from('reports').insert([{
+        reporter_id: currentUser.id,
+        reported_id: profile.id,
+        reason: reportReason || 'Nessuna descrizione fornita',
+        created_at: new Date().toISOString()
+      }]);
+
+      if (error) throw error;
+
+      setToast({ message: 'Segnalazione inviata con successo.', type: 'success' });
+      setIsReportModalOpen(false);
+      setReportReason('');
+    } catch (e) {
+      console.error("Errore durante la segnalazione:", e);
+      setToast({ message: 'Errore durante l\'invio della segnalazione.', type: 'error' });
+    }
+    setIsSubmittingReport(false);
   };
 
   useEffect(() => {
@@ -1927,69 +1952,10 @@ const ProfileDetailPage = () => {
       return;
     }
 
-    if (!profile?.is_online) {
-      setToast({ message: `${profile?.name} è offline non puoi avviare una live in questo momento!`, type: 'info' });
-      return;
-    }
     navigate(`/live-chat/${profile.id}`);
   };
 
-  const handleOpenMessageModal = () => {
-    if (!currentUser?.id) {
-      setToast({ message: "Devi essere iscritto!", type: 'error' });
-      return;
-    }
-    // Allow opening modal for check, the limit check is in sendChatMessage
-    setIsMessageModalOpen(true);
-  };
 
-  const sendChatMessage = async () => {
-    if (!messageText.trim()) return;
-
-    if (soulLinkStatus !== 'accepted') {
-      setIsMessageModalOpen(false);
-      setToast({ message: "Puoi inviare messaggi solo ai tuoi SoulLinks!", type: 'info' });
-      return;
-    }
-
-    // ── Limit free users to max 5 sent messages ──
-    if (currentUser && !currentUser.is_paid) {
-      const { count } = await supabase
-        .from('chat_requests')
-        .select('*', { count: 'exact', head: true })
-        .eq('from_user_id', currentUser.id);
-      if ((count ?? 0) >= 5) {
-        setIsMessageModalOpen(false);
-        setToast({ message: "Hai raggiunto il limite di 5 messaggi. Passa a Premium per scrivere senza limiti!", type: 'info' });
-        return;
-      }
-    }
-
-    const textToSend = messageText;
-    setMessageText('');
-    // Close modal after setting state to avoid flickering
-    setIsMessageModalOpen(false);
-
-    try {
-      const { error } = await supabase
-        .from('chat_requests')
-        .insert([{
-          from_user_id: currentUser!.id,
-          to_user_id: profile?.id,
-          message: textToSend
-        }]);
-
-      if (!error) {
-        setChatStatus('pending');
-        setToast({ message: "Messaggio inviato con successo!", type: 'success' });
-      } else {
-        console.error("Supabase error:", error);
-        setToast({ message: "Errore durante l'invio del messaggio.", type: 'error' });
-      }
-    } catch (err) {
-      setToast({ message: "Errore di connessione", type: 'error' });
-    }
-  };
 
 
   if (loading) return <div className="min-h-screen flex items-center justify-center" style={{ background: '#0a0a0f' }}><motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ repeat: Infinity, duration: 1.5 }}><Heart className="w-12 h-12 text-rose-500 fill-current" style={{ filter: 'drop-shadow(0 0 20px rgba(244,63,94,0.8))' }} /></motion.div></div>;
@@ -2168,38 +2134,19 @@ const ProfileDetailPage = () => {
                     <><UserPlus className="w-4 h-4" /> Richiesta di Amicizia</>}
             </button>
 
-            {/* ── MESSAGE + CHAT pills ── */}
-            <div className="mt-2 flex gap-2">
-              {/* Scrivi messaggio — solo se SoulLink accettato */}
-              <button
-                onClick={handleOpenMessageModal}
-                className="flex-1 py-3 rounded-[16px] font-black text-[11px] uppercase tracking-widest text-white transition-all active:scale-95 flex items-center justify-center gap-1.5"
-                style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)' }}
-              >
-                <Send className="w-3.5 h-3.5 text-rose-400" /> Scrivi Messaggio
-              </button>
-
-              {/* Chatta — solo se online */}
-              <button
-                onClick={profile.is_online ? handleInstantChat : undefined}
-                disabled={!profile.is_online}
-                className={cn(
-                  "flex-1 py-3 rounded-[16px] font-black text-[11px] uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-1.5",
-                  profile.is_online ? "text-white" : "text-white/30 cursor-not-allowed"
-                )}
-                style={profile.is_online ? {
-                  background: chatStatus === 'approved' ? 'rgba(52,211,153,0.2)' : 'rgba(255,255,255,0.08)',
-                  border: chatStatus === 'approved' ? '1px solid rgba(52,211,153,0.4)' : '1px solid rgba(255,255,255,0.15)'
-                } : {
-                  background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)'
-                }}
-              >
-                <MessageCircle className={cn("w-3.5 h-3.5", profile.is_online ? (chatStatus === 'approved' ? "text-emerald-400" : "text-blue-400") : "text-white/20")} />
-                {profile.is_online
-                  ? (chatStatus === 'approved' ? 'Chatta' : chatStatus === 'pending' ? 'Attendendo...' : 'Chatta')
-                  : 'Offline'}
-              </button>
-            </div>
+            {/* Chatta (sempre attiva se si ha l'amicizia) */}
+            <button
+              onClick={handleInstantChat}
+              className="mt-2 w-full py-3.5 rounded-[18px] font-black text-xs uppercase tracking-widest text-white transition-all active:scale-95 flex items-center justify-center gap-2"
+              style={{
+                background: soulLinkStatus === 'accepted' ? 'rgba(52,211,153,0.25)' : 'rgba(255,255,255,0.08)',
+                border: soulLinkStatus === 'accepted' ? '1px solid rgba(52,211,153,0.5)' : '1px solid rgba(255,255,255,0.15)',
+                boxShadow: soulLinkStatus === 'accepted' ? '0 0 20px rgba(52,211,153,0.2)' : 'none'
+              }}
+            >
+              <MessageCircle className={cn("w-4 h-4", soulLinkStatus === 'accepted' ? "text-emerald-400" : "text-white/40")} />
+              Chatta
+            </button>
           </div>
 
           {/* ── MATCH CORNER WIDGET - ONLY IF FRIENDS ── */}
@@ -2320,15 +2267,35 @@ const ProfileDetailPage = () => {
         {/* Gallery */}
         {profile.photos && profile.photos.length > 0 && (
           <div className="rounded-[24px] p-5" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
-            <div className="mb-3 flex items-center justify-center w-12 h-12 rounded-[18px]" style={{ background: 'rgba(244,63,94,0.15)' }}>
+            <div className="mb-4 flex items-center justify-center w-12 h-12 rounded-[18px]" style={{ background: 'rgba(244,63,94,0.15)' }}>
               <Camera className="w-5 h-5 text-rose-400" />
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="flex overflow-x-auto snap-x snap-mandatory gap-3 pb-2 scrollbar-hide">
               {profile.photos.map((url, i) => (
-                <div key={i} className="aspect-square rounded-[16px] overflow-hidden" style={{ border: '1px solid rgba(244,63,94,0.25)' }}>
+                <div
+                  key={i}
+                  onClick={() => setZoomedImage(url)}
+                  className="w-[210px] h-[210px] shrink-0 snap-center rounded-[20px] overflow-hidden relative cursor-zoom-in active:scale-95 transition-transform"
+                  style={{ border: '1.5px solid rgba(244,63,94,0.3)' }}
+                >
                   <img src={url} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent pointer-events-none" />
                 </div>
               ))}
+            </div>
+            <div className="flex justify-center gap-1 mt-3">
+              {profile.photos.map((_, i) => (
+                <div key={i} className="w-1 h-1 rounded-full bg-rose-500/30" />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Feed Section Header */}
+        {!loading && (
+          <div className="rounded-[24px] p-5 mt-4" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <div className="flex items-center justify-center w-12 h-12 rounded-[18px] mb-2" style={{ background: 'rgba(52,211,153,0.15)' }}>
+              <LayoutGrid className="w-5 h-5 text-emerald-400" />
             </div>
           </div>
         )}
@@ -2337,59 +2304,101 @@ const ProfileDetailPage = () => {
         <div className="pt-2">
           <FeedComponent userId={profile.id} isOwner={false} />
         </div>
+
+        {/* ── REPORT USER BUTTON ── */}
+        <div className="pt-8 pb-10">
+          <button
+            onClick={() => setIsReportModalOpen(true)}
+            className="w-full flex items-center justify-center gap-2 py-4 rounded-[24px] text-rose-500/60 font-black text-xs uppercase tracking-widest border border-rose-500/10 hover:bg-rose-500/5 transition-all"
+          >
+            <AlertTriangle className="w-4 h-4" />
+            Segnala Utente
+          </button>
+        </div>
       </div>
 
-      {/* ── MESSAGE MODAL ── */}
+
+
+      {/* ── REPORT MODAL ── */}
       <AnimatePresence>
-        {isMessageModalOpen && (
-          <div className="fixed inset-0 z-[200] flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}
-            onClick={(e) => e.target === e.currentTarget && setIsMessageModalOpen(false)}
-          >
+        {isReportModalOpen && (
+          <div className="fixed inset-0 z-[300] flex items-center justify-center p-6" style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)' }}>
             <motion.div
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="w-full max-w-md rounded-t-[40px] p-8 shadow-2xl space-y-5"
-              style={{ background: '#1a1a22', border: '1px solid rgba(255,255,255,0.08)', marginBottom: '380px' }}
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="w-full max-w-sm rounded-[32px] p-6 shadow-2xl space-y-6 overflow-hidden relative"
+              style={{ background: '#1a1a22', border: '1px solid rgba(244,63,94,0.3)' }}
             >
-              <div className="w-10 h-1 rounded-full mx-auto mb-2" style={{ background: 'rgba(255,255,255,0.15)' }} />
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-[16px] overflow-hidden shrink-0" style={{ border: '2px solid rgba(244,63,94,0.5)' }}>
-                  <img src={(profile.photos && profile.photos.length > 0) ? profile.photos[0] : (profile.photo_url || `https://picsum.photos/seed/${profile.name}/400/600`)} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              <div className="text-center space-y-2">
+                <div className="w-14 h-14 bg-rose-500/10 rounded-full flex items-center justify-center mx-auto mb-2 border border-rose-500/20">
+                  <AlertTriangle className="w-7 h-7 text-rose-500" />
                 </div>
-                <div>
-                  <h3 className="text-lg font-montserrat font-black text-white">Scrivi a {profile.name}</h3>
-                  {soulLinkStatus !== 'accepted' ? (
-                    <p className="text-amber-400 text-[11px] font-bold mt-0.5">⚠️ Solo per SoulLinks — prima aggiungi come amico</p>
-                  ) : (
-                    <p className="text-white/40 text-xs font-montserrat">Il tuo messaggio arriverà a {profile.name}</p>
-                  )}
-                </div>
+                <h3 className="text-xl font-black text-white uppercase tracking-tight">Segnala Utente</h3>
+                <p className="text-white/40 text-xs leading-relaxed px-4">
+                  Stai segnalando <span className="text-white/80">{profile.name}</span>. <br />
+                  <strong className="text-rose-400">Attenzione:</strong> questa azione è definitiva e non può essere revocata.
+                </p>
               </div>
-              <textarea
-                value={messageText}
-                onChange={(e) => setMessageText(e.target.value)}
-                placeholder="Ciao! Mi piacerebbe conoscerti..."
-                className="w-full h-28 p-4 rounded-2xl text-sm outline-none resize-none font-medium text-white/80 placeholder:text-white/20 font-montserrat"
-                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(244,63,94,0.2)', fontFamily: 'Montserrat, sans-serif' }}
-                autoFocus
-              />
-              <div className="flex gap-3">
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">Motivazione (Opzionale)</label>
+                <textarea
+                  value={reportReason}
+                  onChange={e => setReportReason(e.target.value)}
+                  placeholder="Descrivi brevemente il motivo della segnalazione..."
+                  className="w-full bg-white/5 border border-white/10 rounded-[20px] p-4 text-white text-sm outline-none focus:border-rose-500/30 transition-all resize-none h-32 placeholder:text-white/20"
+                />
+              </div>
+
+              <div className="flex flex-col gap-3">
                 <button
-                  onClick={() => setIsMessageModalOpen(false)}
-                  className="flex-1 py-4 rounded-[18px] text-xs font-black uppercase tracking-widest font-montserrat transition-all"
-                  style={{ background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.5)', fontFamily: 'Montserrat, sans-serif' }}
-                >Annulla</button>
+                  disabled={isSubmittingReport}
+                  onClick={handleReportUser}
+                  className="w-full py-4 rounded-[22px] bg-rose-500 text-white font-black text-sm uppercase tracking-widest shadow-[0_0_20px_rgba(244,63,94,0.4)] active:scale-95 transition-all disabled:opacity-50"
+                >
+                  {isSubmittingReport ? 'Invio in corso...' : 'Conferma Segnalazione'}
+                </button>
                 <button
-                  onClick={sendChatMessage}
-                  disabled={!messageText.trim()}
-                  className="flex-1 text-white py-4 rounded-[18px] text-xs font-black uppercase tracking-widest disabled:opacity-40 active:scale-95 font-montserrat"
-                  style={{ background: '#f43f5e', boxShadow: '0 0 20px rgba(244,63,94,0.4)', fontFamily: 'Montserrat, sans-serif' }}
-                >Invia ❤️</button>
+                  disabled={isSubmittingReport}
+                  onClick={() => { setIsReportModalOpen(false); setReportReason(''); }}
+                  className="w-full py-4 rounded-[22px] bg-white/5 border border-white/10 text-white/50 font-black text-sm uppercase tracking-widest hover:text-white transition-all"
+                >
+                  Annulla
+                </button>
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── IMAGE ZOOM MODAL ── */}
+      <AnimatePresence>
+        {zoomedImage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setZoomedImage(null)}
+            className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-black/95 backdrop-blur-xl cursor-zoom-out"
+          >
+            <motion.button
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              className="absolute top-6 right-6 w-12 h-12 bg-white/10 rounded-full flex items-center justify-center text-white backdrop-blur-md border border-white/20 z-50"
+            >
+              <X className="w-6 h-6" />
+            </motion.button>
+            <motion.img
+              initial={{ scale: 0.8, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.8, y: 20 }}
+              src={zoomedImage}
+              className="max-w-full max-h-[85vh] rounded-[32px] shadow-2xl object-contain"
+              style={{ border: '2px solid rgba(255,255,255,0.1)' }}
+              onClick={(e) => e.stopPropagation()}
+            />
+          </motion.div>
         )}
       </AnimatePresence>
 
@@ -4476,129 +4485,167 @@ const AmiciPage = () => {
               )}
               {friends
                 .filter(f => f.other_user?.name?.toLowerCase().includes(searchTerm.toLowerCase()))
-                .map((f, i) => (
-                  <motion.div
-                    key={`container-${f.id}`}
-                    layout
-                    initial={{ opacity: 0, x: -32 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, transition: { duration: 0.2 } }}
-                    transition={{ delay: i * 0.07, type: 'spring', stiffness: 220, damping: 24 }}
-                    className="relative overflow-hidden rounded-[24px]"
-                    style={{ boxShadow: '0 4px 30px rgba(0,0,0,0.4)' }}
-                  >
-                    {/* Swipe-reveal delete zone — rosso fuoco */}
-                    <div className="absolute inset-0 flex items-center justify-end px-6 z-0"
-                      style={{ background: 'linear-gradient(to left, #ef4444, #b91c1c)', boxShadow: 'inset -4px 0 30px rgba(239,68,68,0.5), inset 0 0 60px rgba(239,68,68,0.25)' }}
-                    >
-                      <div className="flex flex-col items-center gap-1.5 text-white">
-                        <Trash2 className="w-7 h-7" style={{ filter: 'drop-shadow(0 0 12px rgba(255,255,255,0.8))' }} />
-                        <span className="text-[9px] font-black uppercase tracking-widest" style={{ textShadow: '0 0 10px rgba(255,255,255,0.6)' }}>Elimina</span>
-                      </div>
-                    </div>
-
+                .map((f, i) => {
+                  const notify = allLastMessages.some(m => m.sender_id === f.other_user?.id && m.receiver_id === currentUser?.id && !readChatIds.has(f.other_user?.id!));
+                  return (
                     <motion.div
-                      key={`card-${f.id}`}
-                      drag="x"
-                      dragConstraints={{ left: -140, right: 0 }}
-                      dragElastic={0.03}
-                      dragSnapToOrigin={true}
-                      onDragEnd={(_, info) => {
-                        // Se l'utente ha trascinato abbastanza a sinistra, scatta l'eliminazione
-                        if (info.offset.x < -100) {
-                          setConfirmDelete(f);
-                        }
+                      key={`container-${f.id}`}
+                      layout
+                      initial={{ opacity: 0, x: -32 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, transition: { duration: 0.2 } }}
+                      transition={{ delay: i * 0.07, type: 'spring', stiffness: 220, damping: 24 }}
+                      className="relative overflow-hidden rounded-[24px]"
+                      style={{
+                        boxShadow: notify
+                          ? '0 0 0 1.5px #f43f5e, 0 0 24px rgba(244,63,94,0.45), 0 4px 30px rgba(0,0,0,0.4)'
+                          : '0 4px 30px rgba(0,0,0,0.4)'
                       }}
-                      // Animazione di suggerimento (Peek) SOLO sul primo banner ogni 10 secondi
-                      animate={i === 0 ? {
-                        x: [0, -20, 0, 0, 0, 0, 0, 0, 0, 0]
-                      } : { x: 0 }}
-                      transition={i === 0 ? {
-                        x: {
-                          duration: 10,
-                          repeat: Infinity,
-                          times: [0, 0.02, 0.04, 1],
-                          ease: "easeInOut"
-                        }
-                      } : { duration: 0.1 }}
-                      whileDrag={{ cursor: 'grabbing', scale: 1.01, zIndex: 50 }}
-                      className="group relative p-4 flex items-center gap-4 transition-all z-10"
-                      style={{ background: '#1a1a22', border: '1px solid rgba(255,255,255,0.07)' }}
                     >
-                      <div className="relative shrink-0">
-                        <ProfileAvatar
-                          user={f.other_user}
-                          className="w-14 h-14 rounded-full shrink-0"
-                          iconSize="w-6 h-6"
-                        />
-                        <div className={cn(
-                          "absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 border-2 rounded-full",
-                          f.other_user?.is_online
-                            ? "bg-emerald-400"
-                            : "bg-white/10"
-                        )}
-                          style={f.other_user?.is_online ? { borderColor: '#1a1a22', boxShadow: '0 0 8px rgba(52,211,153,0.8)' } : { borderColor: '#1a1a22' }}
-                        />
-                      </div>
-
-                      <div
-                        onClick={() => navigate(`/profile-detail/${f.other_user?.id}`)}
-                        className="flex-1 min-w-0 pr-2 cursor-pointer"
+                      {/* Swipe-reveal delete zone — rosso fuoco */}
+                      <div className="absolute inset-0 flex items-center justify-end px-6 z-0"
+                        style={{ background: 'linear-gradient(to left, #ef4444, #b91c1c)', boxShadow: 'inset -4px 0 30px rgba(239,68,68,0.5), inset 0 0 60px rgba(239,68,68,0.25)' }}
                       >
-                        <h3 className="text-[15px] font-black text-white truncate">{f.other_user?.name}</h3>
-                        <div className="mt-0.5 flex items-center gap-2">
-                          {f.other_user?.dob && (
-                            <span className="text-[10px] text-white/40 font-bold">{calculateAge(f.other_user.dob)} anni</span>
-                          )}
-                          {f.other_user?.city && (
-                            <span className="text-[10px] text-white/30 font-bold flex items-center gap-0.5 truncate">
-                              <MapPin className="w-2.5 h-2.5 text-rose-500/60" />{f.other_user.city}
-                            </span>
-                          )}
+                        <div className="flex flex-col items-center gap-1.5 text-white">
+                          <Trash2 className="w-7 h-7" style={{ filter: 'drop-shadow(0 0 12px rgba(255,255,255,0.8))' }} />
+                          <span className="text-[9px] font-black uppercase tracking-widest" style={{ textShadow: '0 0 10px rgba(255,255,255,0.6)' }}>Elimina</span>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 shrink-0">
-                        {/* LiveChat */}
-                        <button
-                          onClick={() => {
-                            if (f.other_user?.is_online) {
-                              navigate(`/live-chat/${f.other_user?.id}`);
-                            } else {
-                              setToast({ message: `${f.other_user?.name} è offline!`, type: 'info' });
-                            }
-                          }}
-                          className="w-9 h-9 text-white rounded-2xl flex items-center justify-center active:scale-90 transition-all"
-                          style={f.other_user?.is_online
-                            ? { background: 'rgba(52,211,153,0.2)', border: '1px solid rgba(52,211,153,0.4)', boxShadow: '0 0 12px rgba(52,211,153,0.3)' }
-                            : { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}
-                          title="Chat Live"
+                      <motion.div
+                        key={`card-${f.id}`}
+                        drag="x"
+                        dragConstraints={{ left: -140, right: 0 }}
+                        dragElastic={0.03}
+                        dragSnapToOrigin={true}
+                        onDragEnd={(_, info) => {
+                          // Se l'utente ha trascinato abbastanza a sinistra, scatta l'eliminazione
+                          if (info.offset.x < -100) {
+                            setConfirmDelete(f);
+                          }
+                        }}
+                        // Animazione di suggerimento (Peek) SOLO sul primo banner ogni 10 secondi
+                        animate={i === 0 ? {
+                          x: [0, -20, 0, 0, 0, 0, 0, 0, 0, 0]
+                        } : { x: 0 }}
+                        transition={i === 0 ? {
+                          x: {
+                            duration: 10,
+                            repeat: Infinity,
+                            times: [0, 0.02, 0.04, 1],
+                            ease: "easeInOut"
+                          }
+                        } : { duration: 0.1 }}
+                        whileDrag={{ cursor: 'grabbing', scale: 1.01, zIndex: 50 }}
+                        className="group relative px-4 py-2.5 flex items-center gap-4 transition-all z-10"
+                        style={{
+                          background: '#1a1a22',
+                          border: notify ? '1px solid rgba(244,63,94,0.0)' : '1px solid rgba(255,255,255,0.07)'
+                        }}
+                      >
+                        {/* Balloon hearts — large, glowing, slow bob */}
+                        {notify && [
+                          { left: 12, size: 18, color: '#f43f5e', dur: 4.2, delay: 0, bot: 8 },
+                          { left: 30, size: 14, color: '#fb7185', dur: 3.8, delay: 0.7, bot: 14 },
+                          { left: 50, size: 22, color: '#f43f5e', dur: 4.8, delay: 0.3, bot: 6 },
+                          { left: 69, size: 16, color: '#fda4af', dur: 3.6, delay: 1.1, bot: 12 },
+                          { left: 85, size: 14, color: '#f43f5e', dur: 4.4, delay: 0.55, bot: 10 },
+                        ].map((h, k) => (
+                          <div
+                            key={k}
+                            className="bha"
+                            style={{
+                              left: `${h.left}%`,
+                              bottom: h.bot,
+                              '--bdur': `${h.dur}s`,
+                              '--bdelay': `${h.delay}s`,
+                              filter: `drop-shadow(0 0 6px ${h.color}) drop-shadow(0 0 12px ${h.color}80)`,
+                            } as React.CSSProperties}
+                          >
+                            <svg width={h.size} height={h.size} viewBox="0 0 24 24" fill={h.color}>
+                              <path d="M12 21.593c-5.63-5.539-11-10.297-11-14.402 0-3.791 3.068-5.191 5.281-5.191 1.312 0 4.151.501 5.719 4.457 1.59-3.968 4.464-4.447 5.726-4.447 2.54 0 5.274 1.621 5.274 5.181 0 4.069-5.136 8.625-11 14.402z" />
+                            </svg>
+                          </div>
+                        ))}
+
+                        <div className="relative shrink-0 rounded-full" style={notify ? { border: '2.5px solid #f43f5e', boxShadow: '0 0 14px rgba(244,63,94,0.7), 0 0 4px rgba(244,63,94,0.4)' } : { border: '2px solid transparent' }}>
+                          <ProfileAvatar
+                            user={f.other_user}
+                            className="w-14 h-14 rounded-full shrink-0"
+                            iconSize="w-6 h-6"
+                          />
+                          <div className={cn(
+                            "absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 border-2 rounded-full",
+                            f.other_user?.is_online
+                              ? "bg-emerald-400"
+                              : "bg-white/10"
+                          )}
+                            style={f.other_user?.is_online ? { borderColor: '#1a1a22', boxShadow: '0 0 8px rgba(52,211,153,0.8)' } : { borderColor: '#1a1a22' }}
+                          />
+                        </div>
+
+                        <div
+                          onClick={() => navigate(`/profile-detail/${f.other_user?.id}`)}
+                          className="flex-1 min-w-0 pr-2 cursor-pointer"
                         >
-                          <MessageCircle className={cn("w-4 h-4", f.other_user?.is_online ? "text-emerald-400" : "text-white/30")} />
-                        </button>
-                        {/* Messaggio privato */}
-                        {(() => {
-                          const hasUnread = allLastMessages.some(m => m.sender_id === f.other_user?.id && m.receiver_id === currentUser?.id && !readChatIds.has(f.other_user?.id!));
-                          return (
-                            <button
-                              onClick={() => setMessagingFriend(normalizeUser(f.other_user!))}
-                              className={cn(
-                                "w-9 h-9 rounded-2xl flex items-center justify-center transition-all active:scale-90",
-                                hasUnread ? "text-white" : "text-white/40 hover:text-white/70"
-                              )}
-                              style={hasUnread
-                                ? { background: '#f43f5e', border: '1px solid rgba(244,63,94,0.5)', boxShadow: '0 0 14px rgba(244,63,94,0.5)' }
-                                : { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}
-                              title="Messaggi"
-                            >
-                              <Send className={cn("w-3.5 h-3.5", hasUnread ? "animate-pulse" : "")} />
-                            </button>
-                          );
-                        })()}
-                      </div>
+                          <h3 className="text-[15px] font-black text-white truncate flex items-center gap-2">
+                            {f.other_user?.name}
+                            {notify && (
+                              <motion.span
+                                animate={{ scale: [1, 1.3, 1] }}
+                                transition={{ repeat: Infinity, duration: 1.2 }}
+                                className="w-2 h-2 rounded-full shrink-0"
+                                style={{ background: '#f43f5e', boxShadow: '0 0 8px rgba(244,63,94,0.9)' }}
+                              />
+                            )}
+                          </h3>
+                          <div className="mt-0.5 flex items-center gap-2">
+                            {f.other_user?.dob && (
+                              <span className="text-[10px] text-white/40 font-bold">{calculateAge(f.other_user.dob)} anni</span>
+                            )}
+                            {f.other_user?.city && (
+                              <span className="text-[10px] text-white/30 font-bold flex items-center gap-0.5 truncate">
+                                <MapPin className="w-2.5 h-2.5 text-rose-500/60" />{f.other_user.city}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          {/* LiveChat */}
+                          <button
+                            onClick={() => {
+                              navigate(`/live-chat/${f.other_user?.id}`);
+                            }}
+                            className="w-9 h-9 text-white rounded-2xl flex items-center justify-center active:scale-90 transition-all"
+                            style={{ background: 'rgba(52,211,153,0.2)', border: '1px solid rgba(52,211,153,0.4)', boxShadow: '0 0 12px rgba(52,211,153,0.3)' }}
+                            title="Chat Live"
+                          >
+                            <MessageCircle className="w-4 h-4 text-emerald-400" />
+                          </button>
+                          {/* Messaggio privato */}
+                          {(() => {
+                            return (
+                              <button
+                                onClick={() => setMessagingFriend(normalizeUser(f.other_user!))}
+                                className={cn(
+                                  "w-9 h-9 rounded-2xl flex items-center justify-center transition-all active:scale-90",
+                                  notify ? "text-white" : "text-white/40 hover:text-white/70"
+                                )}
+                                style={notify
+                                  ? { background: '#f43f5e', border: '1px solid rgba(244,63,94,0.5)', boxShadow: '0 0 14px rgba(244,63,94,0.5)' }
+                                  : { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}
+                                title="Messaggi"
+                              >
+                                <Send className={cn("w-3.5 h-3.5", notify ? "animate-pulse" : "")} />
+                              </button>
+                            );
+                          })()}
+                        </div>
+                      </motion.div>
                     </motion.div>
-                  </motion.div>
-                ))}
+                  )
+                })}
             </AnimatePresence>
           </div>
         </div>
@@ -6679,14 +6726,19 @@ const FeedComponent = ({ userId, isOwner, global = false }: { userId: any, isOwn
       const viewer = localStorage.getItem('soulmatch_user') ? JSON.parse(localStorage.getItem('soulmatch_user')!) : null;
       const viewerId = viewer?.id;
 
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const thirtyDaysAgoISO = thirtyDaysAgo.toISOString();
+
       let query = supabase
         .from('posts')
         .select(`
-            *,
-            user:users (name, photos, photo_url, gender, orientation),
-            post_interactions!post_interactions_post_id_fkey(type),
-            post_comments(id)
-            `)
+                      *,
+                      user:users (name, photos, photo_url, gender, orientation),
+                      post_interactions!post_interactions_post_id_fkey(type),
+                      post_comments(id)
+                      `)
+        .gte('created_at', thirtyDaysAgoISO)
         .order('created_at', { ascending: false });
 
       if (!global || showOnlyMine) {
@@ -6761,6 +6813,23 @@ const FeedComponent = ({ userId, isOwner, global = false }: { userId: any, isOwn
 
       if (!authUserId) {
         alert("Devi essere autenticato per pubblicare.");
+        setIsPosting(false);
+        return;
+      }
+
+      // ── Limit max 10 posts per month ──
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+
+      const { count: monthPosts } = await supabase
+        .from('posts')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', authUserId)
+        .gte('created_at', startOfMonth.toISOString());
+
+      if ((monthPosts || 0) >= 10) {
+        alert("Hai raggiunto il limite di 10 post questo mese.");
         setIsPosting(false);
         return;
       }
@@ -6921,28 +6990,9 @@ const FeedComponent = ({ userId, isOwner, global = false }: { userId: any, isOwn
         )}
       </AnimatePresence>
 
-      {/* ── SEARCH BAR for profile views only ── */}
-      {!global && !isOwner && (
-        <div className="mb-6 flex items-center gap-2 rounded-2xl px-4 py-3"
-          style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(244,63,94,0.35)', boxShadow: '0 0 20px rgba(244,63,94,0.12), inset 0 1px 0 rgba(255,255,255,0.05)' }}
-        >
-          <Search className="w-4 h-4 shrink-0" style={{ color: '#f43f5e', filter: 'drop-shadow(0 0 6px rgba(244,63,94,0.8))' }} />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            placeholder="Cerca nome o parole chiave..."
-            className="flex-1 bg-transparent outline-none text-white text-sm font-bold placeholder:text-white/25"
-          />
-          {searchTerm && (
-            <button onClick={() => setSearchTerm('')} className="text-white/30 hover:text-white/60 transition-colors">
-              <X className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-      )}
 
-      <div className="space-y-6">
+
+      <div className={cn(!global && !isOwner ? "flex overflow-x-auto snap-x snap-mandatory gap-6 pb-6 scrollbar-hide" : "space-y-6")}>
         {(() => {
           const filtered = searchTerm.trim()
             ? posts.filter(p =>
@@ -6951,7 +7001,7 @@ const FeedComponent = ({ userId, isOwner, global = false }: { userId: any, isOwn
             )
             : posts;
           return filtered.length === 0 ? (
-            <div className="text-center py-16 rounded-[32px]" style={{ background: 'rgba(255,255,255,0.04)', border: '1px dashed rgba(255,255,255,0.1)' }}>
+            <div className={cn("text-center py-16 rounded-[32px] w-full", !global && !isOwner ? "snap-center shrink-0" : "")} style={{ background: 'rgba(255,255,255,0.04)', border: '1px dashed rgba(255,255,255,0.1)' }}>
               <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
                 {searchTerm ? <Search className="w-8 h-8 text-white/15" /> : <ImageIcon className="w-8 h-8 text-white/15" />}
               </div>
@@ -6966,7 +7016,7 @@ const FeedComponent = ({ userId, isOwner, global = false }: { userId: any, isOwn
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                className="rounded-[32px] overflow-hidden relative"
+                className={cn("rounded-[32px] overflow-hidden relative", !global && !isOwner ? "w-[85vw] shrink-0 snap-center" : "w-full")}
                 style={{ background: '#1a1a22', boxShadow: '0 4px 40px rgba(0,0,0,0.5)' }}
               >
                 {/* ── PHOTO with top-left user overlay ── */}
@@ -7694,7 +7744,9 @@ const ChatPage = () => {
   const [isSendingReply, setIsSendingReply] = useState(false);
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' | 'info' } | null>(null);
   const location = useLocation();
-  const [activeTab, setActiveTab] = useState<'messaggi' | 'live' | 'flash'>(location.state?.activeTab || 'messaggi');
+  const [activeTab, setActiveTab] = useState<'messaggi' | 'flash'>(location.state?.activeTab || 'messaggi');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [confirmDeleteChat, setConfirmDeleteChat] = useState<any>(null);
   const [isDeletingChat, setIsDeletingChat] = useState(false);
   const [currentFlash, setCurrentFlash] = useState<any>(null);
@@ -7704,18 +7756,21 @@ const ChatPage = () => {
 
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('soulmatch_user');
-      if (saved) {
-        const u = normalizeUser(JSON.parse(saved));
-        setUser(u);
-        fetchData(u.id);
-      } else {
+    const init = async () => {
+      try {
+        const saved = localStorage.getItem('soulmatch_user');
+        if (saved) {
+          const u = normalizeUser(JSON.parse(saved));
+          setUser(u);
+          await fetchData(u.id);
+        } else {
+          navigate('/register');
+        }
+      } catch (e) {
         navigate('/register');
       }
-    } catch (e) {
-      navigate('/register');
-    }
+    };
+    init();
   }, []);
 
   const fetchData = async (userId: string) => {
@@ -7723,13 +7778,13 @@ const ChatPage = () => {
       // 1. Fetch SoulLinks (Friends)
       const { data: sentSL } = await supabase
         .from('soul_links')
-        .select('*, receiver:users!receiver_id(id, name, photos, photo_url, city, is_online)')
+        .select('*, receiver:users!receiver_id(*)')
         .eq('sender_id', userId)
         .eq('status', 'accepted');
 
       const { data: recvSL } = await supabase
         .from('soul_links')
-        .select('*, sender:users!sender_id(id, name, photos, photo_url, city, is_online)')
+        .select('*, sender:users!sender_id(*)')
         .eq('receiver_id', userId)
         .eq('status', 'accepted');
 
@@ -7742,9 +7797,9 @@ const ChatPage = () => {
       const { data: requestsData } = await supabase
         .from('chat_requests')
         .select(`
-                    *,
-                    from_user:users!from_user_id(id, name, surname, photo_url, photos)
-                    `)
+                              *,
+                              from_user:users!from_user_id(id, name, surname, photo_url, photos)
+                              `)
         .eq('to_user_id', userId)
         .order('created_at', { ascending: false });
 
@@ -7764,26 +7819,38 @@ const ChatPage = () => {
       }
 
       // 3. Fetch chat in corso (room_messages)
-      const { data: msgs } = await supabase
+      const { data: msgs, error: msgsError } = await supabase
         .from('room_messages')
         .select(`
-                    id, text, created_at, sender_id, receiver_id,
-                    sender:users!sender_id(id, name, photos, photo_url, is_online, city),
-                    receiver:users!receiver_id(id, name, photos, photo_url, is_online, city)
-                    `)
+          id, text, created_at, sender_id, receiver_id,
+          sender:users!sender_id(*),
+          receiver:users!receiver_id(*)
+        `)
         .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
         .order('created_at', { ascending: false });
 
+      // 3. Process Data into Chat Map
+      const chatMap = new Map();
+
+      // Normalize acceptedFriends to ensure other_user is a single object
+      const normalizedFriends = acceptedFriends.map(f => {
+        const u: any = f.other_user;
+        return {
+          ...f,
+          other_user: Array.isArray(u) ? u[0] : u
+        };
+      });
+
+      // Start with room_messages if available
       if (msgs) {
-        const chatMap = new Map();
         for (const m of msgs) {
           const isSender = m.sender_id === userId;
           const u: any = isSender ? m.receiver : m.sender;
           const otherUser = Array.isArray(u) ? u[0] : u;
-          if (!otherUser) continue;
+          if (!otherUser?.id) continue;
 
           // Check if user is among accepted friends
-          const isFriend = acceptedFriends.some(f => f.other_user?.id === otherUser.id);
+          const isFriend = normalizedFriends.some(f => f.other_user?.id === otherUser.id);
           if (!isFriend) continue; // Only show chats with friends
 
           if (!chatMap.has(otherUser.id)) {
@@ -7798,31 +7865,51 @@ const ChatPage = () => {
             chatMap.get(otherUser.id).messages.unshift({ ...m, isSender });
           }
         }
+      }
 
-        // Also integrate requests into the same conversation list
-        if (requestsData) {
-          for (const r of requestsData) {
-            const from_u = r.from_user;
-            if (!from_u) continue;
-            const isFriend = acceptedFriends.some(f => f.other_user?.id === from_u.id);
-            if (!isFriend) continue;
+      // Merge chat requests
+      if (requestsData) {
+        for (const r of requestsData) {
+          const u: any = r.from_user;
+          const from_u = Array.isArray(u) ? u[0] : u;
+          if (!from_u?.id) continue;
 
-            if (!chatMap.has(from_u.id) || new Date(r.created_at) > new Date(chatMap.get(from_u.id).created_at)) {
-              chatMap.set(from_u.id, {
-                other_user: { ...from_u, photo_url: from_u.photos?.[0] || from_u.photo_url },
-                last_msg: r.message,
-                created_at: r.created_at,
-                isSender: false
-              });
-            }
+          const isFriend = normalizedFriends.some(f => f.other_user?.id === from_u.id);
+          if (!isFriend) continue;
+
+          if (!chatMap.has(from_u.id) || new Date(r.created_at) > new Date(chatMap.get(from_u.id).created_at)) {
+            chatMap.set(from_u.id, {
+              other_user: { ...from_u, photo_url: from_u.photos?.[0] || from_u.photo_url },
+              last_msg: r.message,
+              created_at: r.created_at,
+              isSender: false,
+              messages: []
+            });
           }
         }
-
-        const sorted = Array.from(chatMap.values()).sort((a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
-        setActiveChats(sorted);
       }
+
+      // Finally, ensure all friends are included
+      normalizedFriends.forEach(f => {
+        const friendUser = f.other_user;
+        if (friendUser?.id && !chatMap.has(friendUser.id)) {
+          chatMap.set(friendUser.id, {
+            other_user: {
+              ...friendUser,
+              photo_url: friendUser.photos?.[0] || friendUser.photo_url || `https://picsum.photos/seed/${friendUser.id}/100`
+            },
+            last_msg: 'Inizia una conversazione...',
+            created_at: f.created_at || new Date().toISOString(),
+            isSender: false,
+            messages: []
+          });
+        }
+      });
+
+      const sorted = Array.from(chatMap.values()).sort((a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+      setActiveChats(sorted);
 
       // 4. Fetch personal active flash banner
       const { data: flashData } = await supabase
@@ -7925,7 +8012,7 @@ const ChatPage = () => {
   if (!user) return null;
 
   return (
-    <div className="min-h-screen pt-16 pb-60 relative overflow-x-hidden" style={{ background: '#0a0a0f' }}>
+    <div className="min-h-screen pt-[178px] pb-60 relative overflow-x-hidden" style={{ background: '#0a0a0f' }}>
       {/* Floating hearts background */}
       <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
         <style>{`
@@ -8008,44 +8095,84 @@ const ChatPage = () => {
           </motion.div>
         )}
       </AnimatePresence>
-      <motion.div
-        initial={{ y: -100, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ type: "spring", stiffness: 100, damping: 15, duration: 0.8 }}
-        className="flex justify-center gap-3 mx-4 mb-2 pt-2"
-      >
-        {[
-          { id: 'messaggi', label: 'Messaggi', icon: MessageSquare, count: chatRequests.filter(r => r.status === 'pending').length },
-          { id: 'live', label: 'LiveChat', icon: Users, count: friends.filter(f => f.other_user?.is_online).length },
-          { id: 'flash', label: 'Flash', icon: Zap, count: currentFlash ? 1 : 0 }
-        ].map(tab => {
-          const isActive = activeTab === tab.id;
-          const isFlashWithContent = tab.id === 'flash' && currentFlash;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as 'messaggi' | 'live' | 'flash')}
-              className={cn(
-                "flex-1 flex flex-col items-center justify-center gap-1.5 px-1 py-3 lg:px-4 lg:py-3.5 rounded-[28px] transition-all relative overflow-hidden",
-                isActive
-                  ? "text-white shadow-lg shadow-rose-500/30"
-                  : "text-white/30 hover:text-white/50"
-              )}
-              style={isActive ? { background: '#f43f5e', boxShadow: '0 0 20px rgba(244,63,94,0.5)' } : { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}
-            >
-              <tab.icon className={cn("w-5 h-5 lg:w-6 lg:h-6 shrink-0", isActive ? "text-white" : (isFlashWithContent ? "text-white" : "text-stone-300"))} />
-              <div className="flex flex-col items-center">
-                <span className={cn("text-[8px] lg:text-[11px] font-black uppercase tracking-wider lg:tracking-[0.2em] leading-none text-center", isActive ? "text-white" : (isFlashWithContent ? "text-white" : "text-stone-500"))}>
-                  {tab.label}
-                </span>
-                <span className={cn("text-[8px] lg:text-[9px] font-black mt-1", isActive ? "text-white/40 tracking-wider lg:tracking-[0.2em]" : (isFlashWithContent ? "text-white/60" : "text-stone-400 tracking-wider lg:tracking-[0.2em]"))}>
-                  {tab.count}
-                </span>
+      {/* ── FLOATING TAG HEADER ── */}
+      <div className="fixed top-[78px] left-1/2 -translate-x-1/2 z-[40]">
+        <motion.div
+          initial={{ y: -100, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{
+            type: 'spring',
+            stiffness: 200,
+            damping: 18,
+            delay: 0.1,
+            duration: 0.8
+          }}
+          className="flex items-center gap-2"
+        >
+          <button
+            onClick={() => setActiveTab('flash')}
+            className={cn(
+              "w-12 h-12 rounded-[28px] flex items-center justify-center shrink-0 transition-all relative z-[41]",
+              activeTab === 'flash' ? "bg-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.5)]" : "bg-white/5 border border-white/10 hover:bg-white/10"
+            )}
+          >
+            <Zap className={cn("w-5 h-5", activeTab === 'flash' ? "text-white" : "text-amber-400")} />
+          </button>
+
+          <div
+            className="backdrop-blur-2xl text-white px-5 py-3.5 rounded-[32px] flex items-center gap-4 justify-between cursor-pointer relative"
+            style={{ background: 'rgba(10,10,15,0.85)', border: '1px solid rgba(244,63,94,0.5)', boxShadow: '0 0 28px rgba(244,63,94,0.25), 0 0 8px rgba(244,63,94,0.1), inset 0 1px 0 rgba(255,255,255,0.06)' }}
+            onClick={() => {
+              setActiveTab('messaggi');
+              setIsSearchOpen(!isSearchOpen);
+              if (isSearchOpen) setSearchTerm('');
+            }}
+          >
+            <div className="flex items-center gap-3 relative z-10">
+              <div className="w-9 h-9 rounded-2xl flex items-center justify-center" style={{ background: '#f43f5e', boxShadow: '0 0 18px rgba(244,63,94,0.7)' }}>
+                <MessageCircle className="w-5 h-5 text-white" />
               </div>
-            </button>
-          );
-        })}
-      </motion.div>
+              <div className="flex flex-col">
+                <span className="text-base font-black uppercase tracking-[0.25em] leading-none">Chat</span>
+                <span className="text-[9px] font-bold text-white/30 mt-0.5 tracking-widest">{activeChats.length + friends.filter(f => !activeChats.some(c => c.other_user.id === f.other_user?.id)).length} chats</span>
+              </div>
+            </div>
+            <div className="w-7 h-7 rounded-full flex items-center justify-center relative z-10"
+              style={{ background: isSearchOpen ? 'rgba(244,63,94,0.3)' : 'rgba(255,255,255,0.06)' }}
+            >
+              <Search className="w-3.5 h-3.5" style={{ color: isSearchOpen ? '#f43f5e' : 'rgba(255,255,255,0.3)', filter: isSearchOpen ? 'drop-shadow(0 0 4px rgba(244,63,94,0.8))' : 'none' }} />
+            </div>
+          </div>
+
+          {/* Search slides from the right of the pill */}
+          <AnimatePresence>
+            {isSearchOpen && (
+              <motion.div
+                key="search-slide"
+                initial={{ width: 0, opacity: 0 }}
+                animate={{ width: 190, opacity: 1 }}
+                exit={{ width: 0, opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 260, damping: 28 }}
+                className="overflow-hidden"
+                style={{ borderRadius: 24 }}
+              >
+                <div className="flex items-center gap-2 px-4 py-3.5 whitespace-nowrap" style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', backdropFilter: 'blur(20px)', borderRadius: 24, width: 190 }}>
+                  <Search className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                  <input
+                    autoFocus
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Cerca..."
+                    className="w-full bg-transparent outline-none text-white text-sm font-bold placeholder:text-white/25"
+                    style={{ minWidth: 0 }}
+                  />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
+      </div>
 
 
       <div className="mx-4 mt-2">
@@ -8069,327 +8196,240 @@ const ChatPage = () => {
                   className="space-y-6"
                 >
 
-                  {/* Chat Attive e Messaggi (WhatsApp Style with swiping) */}
-                  {activeChats.length > 0 && (
-                    <div className="space-y-4 pt-2 pb-32">
-                      {activeChats.map((chat) => {
-                        const hasUnread = !chat.isSender && !readChatIds.has(chat.other_user.id);
-                        const isOpen = replyingTo === chat.other_user.id;
-                        const notify = hasUnread && !isOpen;
-                        return (
+                  {activeChats
+                    .filter((c) => c.other_user?.name?.toLowerCase().includes(searchTerm.toLowerCase()))
+                    .map((chat) => {
+                      const notify = chatRequests.some(r => r.from_user_id === chat.other_user.id && r.status === 'pending') && !readChatIds.has(chat.other_user.id);
+                      const hasUnread = notify;
+
+                      return (
+                        <motion.div
+                          key={`chat-${chat.other_user.id}`}
+                          layout
+                          initial={{ opacity: 0, x: -24 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, transition: { duration: 0.2 } }}
+                          transition={{ type: 'spring', stiffness: 220, damping: 24 }}
+                          className="relative overflow-hidden rounded-[24px]"
+                          data-chat-card
+                          style={{
+                            boxShadow: notify
+                              ? '0 0 0 1.5px #f43f5e, 0 0 24px rgba(244,63,94,0.45), 0 4px 30px rgba(0,0,0,0.4)'
+                              : '0 4px 30px rgba(0,0,0,0.4)'
+                          }}
+                        >
+                          {/* Swipe delete zone — rosso fuoco */}
+                          <div className="absolute inset-0 flex items-center justify-end px-6 z-0"
+                            style={{ background: 'linear-gradient(to left, #ef4444, #b91c1c)', boxShadow: 'inset -4px 0 30px rgba(239,68,68,0.5)' }}
+                          >
+                            <div className="flex flex-col items-center gap-1.5 text-white">
+                              <Trash2 className="w-7 h-7" style={{ filter: 'drop-shadow(0 0 10px rgba(255,255,255,0.8))' }} />
+                              <span className="text-[9px] font-black uppercase tracking-widest" style={{ textShadow: '0 0 8px rgba(255,255,255,0.6)' }}>Elimina</span>
+                            </div>
+                          </div>
+
                           <motion.div
-                            key={`chat-${chat.other_user.id}`}
-                            layout
-                            initial={{ opacity: 0, x: -24 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, transition: { duration: 0.2 } }}
-                            transition={{ type: 'spring', stiffness: 220, damping: 24 }}
-                            className="relative overflow-hidden rounded-[24px]"
-                            data-chat-card
+                            drag="x"
+                            dragConstraints={{ left: -100, right: 0 }}
+                            dragElastic={0.03}
+                            dragSnapToOrigin={true}
+                            onDragEnd={(_, info) => {
+                              if (info.offset.x < -80) { setConfirmDeleteChat(chat); }
+                            }}
+                            onClick={(e) => {
+                              const willOpen = replyingTo !== chat.other_user.id;
+                              setReplyingTo(willOpen ? chat.other_user.id : null);
+                              if (willOpen) {
+                                setReadChatIds(prev => new Set([...prev, chat.other_user.id]));
+                                setTimeout(() => {
+                                  (e.currentTarget as HTMLElement)
+                                    .closest('[data-chat-card]')
+                                    ?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                                }, 320);
+                              }
+                            }}
+                            className="group px-4 py-2.5 flex items-center gap-4 z-10 cursor-pointer relative overflow-hidden"
                             style={{
-                              boxShadow: notify
-                                ? '0 0 0 1.5px #f43f5e, 0 0 24px rgba(244,63,94,0.45), 0 4px 30px rgba(0,0,0,0.4)'
-                                : '0 4px 30px rgba(0,0,0,0.4)'
+                              background: '#1a1a22',
+                              border: notify ? '1px solid rgba(244,63,94,0.0)' : '1px solid rgba(255,255,255,0.07)',
+                              transition: 'border 0.3s ease'
                             }}
                           >
-                            {/* Swipe delete zone — rosso fuoco */}
-                            <div className="absolute inset-0 flex items-center justify-end px-6 z-0"
-                              style={{ background: 'linear-gradient(to left, #ef4444, #b91c1c)', boxShadow: 'inset -4px 0 30px rgba(239,68,68,0.5)' }}
+                            {/* Balloon hearts — large, glowing, slow bob */}
+                            {notify && [
+                              { left: 12, size: 18, color: '#f43f5e', dur: 4.2, delay: 0, bot: 8 },
+                              { left: 30, size: 14, color: '#fb7185', dur: 3.8, delay: 0.7, bot: 14 },
+                              { left: 50, size: 22, color: '#f43f5e', dur: 4.8, delay: 0.3, bot: 6 },
+                              { left: 69, size: 16, color: '#fda4af', dur: 3.6, delay: 1.1, bot: 12 },
+                              { left: 85, size: 14, color: '#f43f5e', dur: 4.4, delay: 0.55, bot: 10 },
+                            ].map((h, i) => (
+                              <div
+                                key={i}
+                                className="bha"
+                                style={{
+                                  left: `${h.left}%`,
+                                  bottom: h.bot,
+                                  '--bdur': `${h.dur}s`,
+                                  '--bdelay': `${h.delay}s`,
+                                  filter: `drop-shadow(0 0 6px ${h.color}) drop-shadow(0 0 12px ${h.color}80)`,
+                                } as React.CSSProperties}
+                              >
+                                <svg width={h.size} height={h.size} viewBox="0 0 24 24" fill={h.color}>
+                                  <path d="M12 21.593c-5.63-5.539-11-10.297-11-14.402 0-3.791 3.068-5.191 5.281-5.191 1.312 0 4.151.501 5.719 4.457 1.59-3.968 4.464-4.447 5.726-4.447 2.54 0 5.274 1.621 5.274 5.181 0 4.069-5.136 8.625-11 14.402z" />
+                                </svg>
+                              </div>
+                            ))}
+
+                            {/* Profile icon with red ring on notify */}
+                            <div
+                              className="w-14 h-14 rounded-full overflow-hidden shrink-0 relative"
+                              style={notify ? {
+                                border: '2.5px solid #f43f5e',
+                                boxShadow: '0 0 14px rgba(244,63,94,0.7), 0 0 4px rgba(244,63,94,0.4)'
+                              } : { border: '2px solid transparent' }}
                             >
-                              <div className="flex flex-col items-center gap-1.5 text-white">
-                                <Trash2 className="w-7 h-7" style={{ filter: 'drop-shadow(0 0 10px rgba(255,255,255,0.8))' }} />
-                                <span className="text-[9px] font-black uppercase tracking-widest" style={{ textShadow: '0 0 8px rgba(255,255,255,0.6)' }}>Elimina</span>
+                              <ProfileAvatar user={chat.other_user} className="w-full h-full" iconSize="w-6 h-6" />
+                            </div>
+
+                            <div className="flex-1 min-w-0">
+                              <div className="flex justify-between items-center mb-0.5">
+                                <h3 className="text-[15px] font-black text-white truncate flex-1 flex items-center gap-2">
+                                  {chat.other_user.name}
+                                  {notify && (
+                                    <motion.span
+                                      animate={{ scale: [1, 1.3, 1] }}
+                                      transition={{ repeat: Infinity, duration: 1.2 }}
+                                      className="w-2 h-2 rounded-full shrink-0"
+                                      style={{ background: '#f43f5e', boxShadow: '0 0 8px rgba(244,63,94,0.9)' }}
+                                    />
+                                  )}
+                                </h3>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigate(`/live-chat/${chat.other_user.id}`);
+                                  }}
+                                  className="w-[38px] h-[38px] rounded-full flex items-center justify-center shrink-0 ml-2 transition-colors active:scale-95 group-hover:bg-rose-500/20"
+                                  style={{ background: 'rgba(244,63,94,0.1)', border: '1px solid rgba(244,63,94,0.2)' }}
+                                >
+                                  <MessageCircle className="w-[17px] h-[17px] text-rose-400" />
+                                </button>
+                              </div>
+                              <div className="flex flex-col gap-1 mt-0.5">
+                                <p className={cn("text-[13px] truncate font-medium", hasUnread ? "text-white font-bold" : "text-white/35")}>
+                                  {chat.isSender && <span className="opacity-50">Tu: </span>}{chat.last_msg}
+                                </p>
+                                <span className="text-[10px] text-white/20 font-bold leading-[1.2]">
+                                  {new Date(chat.created_at).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' })} • {String(new Date(chat.created_at).getHours()).padStart(2, '0')}:{String(new Date(chat.created_at).getMinutes()).padStart(2, '0')}
+                                </span>
                               </div>
                             </div>
 
-                            <motion.div
-                              drag="x"
-                              dragConstraints={{ left: -100, right: 0 }}
-                              dragElastic={0.03}
-                              dragSnapToOrigin={true}
-                              onDragEnd={(_, info) => {
-                                if (info.offset.x < -80) { setConfirmDeleteChat(chat); }
-                              }}
-                              onClick={(e) => {
-                                const willOpen = replyingTo !== chat.other_user.id;
-                                setReplyingTo(willOpen ? chat.other_user.id : null);
-                                if (willOpen) {
-                                  setReadChatIds(prev => new Set([...prev, chat.other_user.id]));
-                                  setTimeout(() => {
-                                    (e.currentTarget as HTMLElement)
-                                      .closest('[data-chat-card]')
-                                      ?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-                                  }, 320);
-                                }
-                              }}
-                              className="group p-4 flex items-center gap-4 z-10 cursor-pointer relative overflow-hidden"
-                              style={{
-                                background: '#1a1a22',
-                                border: notify ? '1px solid rgba(244,63,94,0.0)' : '1px solid rgba(255,255,255,0.07)',
-                                transition: 'border 0.3s ease'
-                              }}
-                            >
-                              {/* Balloon hearts — large, glowing, slow bob */}
-                              {notify && [
-                                { left: 12, size: 18, color: '#f43f5e', dur: 4.2, delay: 0, bot: 8 },
-                                { left: 30, size: 14, color: '#fb7185', dur: 3.8, delay: 0.7, bot: 14 },
-                                { left: 50, size: 22, color: '#f43f5e', dur: 4.8, delay: 0.3, bot: 6 },
-                                { left: 69, size: 16, color: '#fda4af', dur: 3.6, delay: 1.1, bot: 12 },
-                                { left: 85, size: 14, color: '#f43f5e', dur: 4.4, delay: 0.55, bot: 10 },
-                              ].map((h, i) => (
-                                <div
-                                  key={i}
-                                  className="bha"
-                                  style={{
-                                    left: `${h.left}%`,
-                                    bottom: h.bot,
-                                    '--bdur': `${h.dur}s`,
-                                    '--bdelay': `${h.delay}s`,
-                                    filter: `drop-shadow(0 0 6px ${h.color}) drop-shadow(0 0 12px ${h.color}80)`,
-                                  } as React.CSSProperties}
-                                >
-                                  <svg width={h.size} height={h.size} viewBox="0 0 24 24" fill={h.color}>
-                                    <path d="M12 21.593c-5.63-5.539-11-10.297-11-14.402 0-3.791 3.068-5.191 5.281-5.191 1.312 0 4.151.501 5.719 4.457 1.59-3.968 4.464-4.447 5.726-4.447 2.54 0 5.274 1.621 5.274 5.181 0 4.069-5.136 8.625-11 14.402z" />
-                                  </svg>
-                                </div>
-                              ))}
-
-                              {/* Profile icon with red ring on notify */}
-                              <div
-                                className="w-14 h-14 rounded-full overflow-hidden shrink-0 relative"
-                                style={notify ? {
-                                  border: '2.5px solid #f43f5e',
-                                  boxShadow: '0 0 14px rgba(244,63,94,0.7), 0 0 4px rgba(244,63,94,0.4)'
-                                } : { border: '2px solid transparent' }}
-                              >
-                                <ProfileAvatar user={chat.other_user} className="w-full h-full" iconSize="w-6 h-6" />
-                              </div>
-
-                              <div className="flex-1 min-w-0">
-                                <div className="flex justify-between items-center mb-0.5">
-                                  <h3 className="text-[15px] font-black text-white truncate flex-1 flex items-center gap-2">
-                                    {chat.other_user.name}
-                                    {notify && (
-                                      <motion.span
-                                        animate={{ scale: [1, 1.3, 1] }}
-                                        transition={{ repeat: Infinity, duration: 1.2 }}
-                                        className="w-2 h-2 rounded-full shrink-0"
-                                        style={{ background: '#f43f5e', boxShadow: '0 0 8px rgba(244,63,94,0.9)' }}
-                                      />
-                                    )}
-                                  </h3>
-                                  <span className="text-[9px] text-white/25 font-bold ml-2 text-right leading-[1.2]">
-                                    {new Date(chat.created_at).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })}<br />
-                                    {new Date(chat.created_at).getHours()}:{String(new Date(chat.created_at).getMinutes()).padStart(2, '0')}
-                                  </span>
-                                </div>
-                                <p className={cn("text-[13px] truncate font-medium", hasUnread ? "text-white font-bold" : "text-white/35")}>
-                                  {chat.isSender ? 'Tu: ' : ''}{chat.last_msg}
-                                </p>
-                              </div>
-                            </motion.div>
-
-                            <AnimatePresence>
-                              {replyingTo === chat.other_user.id && (
-                                <motion.div
-                                  initial={{ opacity: 0, height: 0 }}
-                                  animate={{ opacity: 1, height: 'auto' }}
-                                  exit={{ opacity: 0, height: 0 }}
-                                  className="relative z-[1] flex flex-col overflow-hidden rounded-b-[24px]"
-                                  style={{ background: 'rgba(10,10,15,0.92)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderTop: '1px solid rgba(255,255,255,0.06)' }}
-                                >
-                                  {/* Cronologia messaggi inline */}
-                                  <div className="max-h-64 overflow-y-auto p-4 space-y-3" style={{ scrollBehavior: 'smooth' }}>
-                                    {chat.messages && chat.messages.map((m: any) => (
-                                      <div key={m.id} className={cn("flex flex-col max-w-[80%]", m.isSender ? "ml-auto items-end" : "mr-auto items-start")}>
-                                        <div
-                                          className="px-4 py-3 rounded-2xl"
-                                          style={m.isSender
-                                            ? { background: '#f43f5e', color: 'white', borderBottomRightRadius: 4, boxShadow: '0 0 10px rgba(244,63,94,0.35)' }
-                                            : { background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.85)', borderBottomLeftRadius: 4 }}
-                                        >
-                                          <p className="text-[13px] leading-relaxed break-words whitespace-pre-wrap">{m.text}</p>
-                                        </div>
-                                        <span className="text-[9px] text-white/25 font-bold mt-1 px-1">
-                                          {new Date(m.created_at).getHours()}:{String(new Date(m.created_at).getMinutes()).padStart(2, '0')}
-                                        </span>
-                                      </div>
-                                    ))}
-                                  </div>
-
-                                  {/* Reply input — dark glass */}
-                                  <div className="px-4 pb-4 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                                    <div className="flex gap-2 items-end rounded-[22px] px-4 py-3" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                                      <textarea
-                                        value={replyText}
-                                        onChange={e => setReplyText(e.target.value)}
-                                        placeholder={`Rispondi a ${chat.other_user.name}...`}
-                                        className="flex-1 bg-transparent text-white text-[14px] font-medium resize-none focus:outline-none placeholder:text-white/25 min-h-[36px] max-h-28"
-                                        rows={1}
-                                        onInput={(e) => {
-                                          const target = e.target as HTMLTextAreaElement;
-                                          target.style.height = 'auto';
-                                          target.style.height = `${Math.min(112, target.scrollHeight)}px`;
-                                        }}
-                                        onKeyDown={(e) => {
-                                          if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendReply(chat.other_user.id); }
-                                        }}
-                                      />
-                                      <button
-                                        disabled={!replyText.trim() || isSendingReply}
-                                        onClick={() => handleSendReply(chat.other_user.id)}
-                                        className="w-10 h-10 text-white rounded-2xl flex items-center justify-center active:scale-95 transition-all disabled:opacity-30 shrink-0"
-                                        style={{ background: '#f43f5e', boxShadow: '0 0 14px rgba(244,63,94,0.6)' }}
-                                      >
-                                        {isSendingReply ? (
-                                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                        ) : (
-                                          <Send className="w-4 h-4 rotate-[-45deg]" />
-                                        )}
-                                      </button>
-                                    </div>
-                                  </div>
-                                </motion.div>
-                              )
-                              }
-                            </AnimatePresence>
                           </motion.div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </motion.div>
-              )}
 
-              {activeTab === 'live' && (
-                <motion.div
-                  key="live"
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 10 }}
-                  className="space-y-4"
-                >
-                  <div className="flex items-center justify-between mb-4">
-                  </div>
-
-                  {friends.filter(f => f.other_user?.is_online).length === 0 ? (
-                    <div className="text-center py-8">
-                      <div className="w-16 h-16 bg-stone-50 rounded-full flex items-center justify-center mx-auto mb-3">
-                        <Users className="w-8 h-8 text-stone-300" />
-                      </div>
-                      <p className="text-stone-500 font-medium text-sm">Nessun amico online in questo momento.</p>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-4 px-1">
-                      {friends
-                        .filter(f => f.other_user?.is_online)
-                        .map(f => {
-                          const unreadCount = chatRequests.filter(r => r.from_user_id === f.other_user?.id && r.status === 'pending').length;
-                          const chat = activeChats.find(c => c.other_user.id === f.other_user?.id);
-                          const time = chat ? new Date(chat.created_at).getTime() : 0;
-                          return { f, unreadCount, time };
-                        })
-                        .sort((a, b) => {
-                          if (a.unreadCount > 0 && b.unreadCount === 0) return -1;
-                          if (b.unreadCount > 0 && a.unreadCount === 0) return 1;
-                          return b.time - a.time;
-                        })
-                        .map(({ f, unreadCount }, i) => {
-                          const pu = f.other_user;
-                          return (
-                            <motion.div
-                              key={f.id}
-                              initial={{ opacity: 0, scale: 0.85 }}
-                              animate={{ opacity: 1, scale: 1 }}
-                              transition={{ delay: i * 0.06, type: 'spring', stiffness: 260, damping: 18 }}
-                              onClick={() => {
-                                if (pu?.is_online) {
-                                  navigate(`/live-chat/${pu?.id}`);
-                                } else {
-                                  setToast({ message: `${pu?.name} è offline, non puoi avviare una live!`, type: 'info' });
-                                }
-                              }}
-                              whileHover={{ scale: 1.03 }}
-                              whileTap={{ scale: 0.97 }}
-                              className="relative group cursor-pointer"
-                            >
-                              <div
-                                className="aspect-[3/5.5] rounded-[28px] overflow-hidden bg-stone-900 relative shadow-xl group-hover:shadow-2xl transition-all duration-300"
-                                style={{ border: '2px solid #f43f5e', boxShadow: '0 0 18px rgba(244,63,94,0.4), 0 0 4px rgba(244,63,94,0.2)' }}
+                          <AnimatePresence>
+                            {replyingTo === chat.other_user.id && (
+                              <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                                className="relative z-[1] flex flex-col overflow-hidden rounded-b-[24px]"
+                                style={{ background: 'rgba(10,10,15,0.92)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderTop: '1px solid rgba(255,255,255,0.06)' }}
                               >
-                                <img
-                                  src={pu?.photos?.[0] || pu?.photo_url || `https://picsum.photos/seed/${pu?.name}/400/500`}
-                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                                  alt={pu?.name}
-                                  onContextMenu={e => e.preventDefault()}
-                                />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
-
-                                <div className="absolute top-2.5 right-2.5 flex flex-col items-end gap-1.5">
-                                  <div className="w-3.5 h-3.5 rounded-full bg-emerald-400 border-2"
-                                    style={{ borderColor: '#0a0a0f', boxShadow: '0 0 8px rgba(52,211,153,0.8)' }}
-                                  />
-                                  {unreadCount > 0 && (
-                                    <div
-                                      className="w-6 h-6 text-white text-[10px] font-black rounded-full border-2 flex items-center justify-center animate-bounce"
-                                      style={{ background: '#f43f5e', borderColor: '#0a0a0f', boxShadow: '0 0 10px rgba(244,63,94,0.8)' }}
-                                    >
-                                      {unreadCount}
+                                {/* Cronologia messaggi inline */}
+                                <div className="max-h-64 overflow-y-auto p-4 space-y-3" style={{ scrollBehavior: 'smooth' }}>
+                                  {chat.messages && chat.messages.map((m: any) => (
+                                    <div key={m.id} className={cn("flex flex-col max-w-[80%]", m.isSender ? "ml-auto items-end" : "mr-auto items-start")}>
+                                      <div
+                                        className="px-4 py-3 rounded-2xl"
+                                        style={m.isSender
+                                          ? { background: '#f43f5e', color: 'white', borderBottomRightRadius: 4, boxShadow: '0 0 10px rgba(244,63,94,0.35)' }
+                                          : { background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.85)', borderBottomLeftRadius: 4 }}
+                                      >
+                                        <p className="text-[13px] leading-relaxed break-words whitespace-pre-wrap">{m.text}</p>
+                                      </div>
+                                      <span className="text-[9px] text-white/25 font-bold mt-1 px-1">
+                                        {new Date(m.created_at).getHours()}:{String(new Date(m.created_at).getMinutes()).padStart(2, '0')}
+                                      </span>
                                     </div>
-                                  )}
+                                  ))}
                                 </div>
 
-                                <div className="absolute bottom-0 left-0 right-0 p-3">
-                                  <p className="text-white text-[13px] font-black drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] truncate mb-0.5">
-                                    {pu?.name}{pu?.dob && calculateAge(pu.dob) > 0 ? `, ${calculateAge(pu.dob)}` : ''}
-                                  </p>
-                                  {pu?.city && (
-                                    <p className="text-white/80 text-[10px] font-bold truncate flex items-center gap-1">
-                                      <MapPin className="w-2.5 h-2.5" />{pu.city}
-                                    </p>
-                                  )}
+                                {/* Reply input — dark glass */}
+                                <div className="px-4 pb-4 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                                  <div className="flex gap-2 items-end rounded-[22px] px-4 py-3" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                                    <textarea
+                                      value={replyText}
+                                      onChange={e => setReplyText(e.target.value)}
+                                      placeholder={`Rispondi a ${chat.other_user.name}...`}
+                                      className="flex-1 bg-transparent text-white text-[14px] font-medium resize-none focus:outline-none placeholder:text-white/25 min-h-[36px] max-h-28"
+                                      rows={1}
+                                      onInput={(e) => {
+                                        const target = e.target as HTMLTextAreaElement;
+                                        target.style.height = 'auto';
+                                        target.style.height = `${Math.min(112, target.scrollHeight)}px`;
+                                      }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendReply(chat.other_user.id); }
+                                      }}
+                                    />
+                                    <button
+                                      disabled={!replyText.trim() || isSendingReply}
+                                      onClick={() => handleSendReply(chat.other_user.id)}
+                                      className="w-10 h-10 text-white rounded-2xl flex items-center justify-center active:scale-95 transition-all disabled:opacity-30 shrink-0"
+                                      style={{ background: '#f43f5e', boxShadow: '0 0 14px rgba(244,63,94,0.6)' }}
+                                    >
+                                      {isSendingReply ? (
+                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                      ) : (
+                                        <Send className="w-4 h-4 rotate-[-45deg]" />
+                                      )}
+                                    </button>
+                                  </div>
                                 </div>
-                              </div>
-                            </motion.div>
-                          );
-                        })}
-                    </div>
-                  )}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </motion.div>
+                      );
+                    })}
                 </motion.div>
               )}
+
+              {/* Tab live rimosso */}
               {activeTab === 'flash' && (
                 <motion.div
                   key="flash"
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 10 }}
-                  className="space-y-6 bg-white p-6 rounded-[28px] border border-stone-100 shadow-sm"
+                  className="space-y-6 p-6 rounded-[28px] mt-16 relative z-0"
                 >
                   <div className="flex flex-col items-center text-center space-y-3 mb-6">
-                    <div className="w-16 h-16 bg-gradient-to-tr from-amber-100 to-amber-200 rounded-full flex items-center justify-center shadow-inner">
+                    <div className="w-16 h-16 bg-gradient-to-tr from-amber-500/10 to-amber-500/20 rounded-full flex items-center justify-center shadow-inner border border-amber-500/20">
                       <Zap className="w-8 h-8 text-amber-500" />
                     </div>
                     <div>
-                      <h3 className="text-lg font-black text-stone-900 mb-1">Messaggio Flash</h3>
-                      <p className="text-[12px] font-medium text-stone-500 leading-relaxed px-2">
-                        Pubblica un pensiero, una richiesta o un'idea in <strong className="text-amber-600">Bacheca</strong>. <br />
-                        Dura solo <strong className="text-stone-800">24 ore</strong>, non è modificabile e poi svanisce per sempre. È visibile a tutti gli utenti dell'app!
+                      <h3 className="text-lg font-black text-white mb-1">Messaggio Flash</h3>
+                      <p className="text-[12px] font-medium text-white/50 leading-relaxed px-2">
+                        Pubblica un pensiero, una richiesta o un'idea in <strong className="text-amber-500">Bacheca</strong>. <br />
+                        Dura solo <strong className="text-stone-300">24 ore</strong>, non è modificabile e poi svanisce per sempre.
                       </p>
                     </div>
                   </div>
 
                   {currentFlash ? (
-                    <div className="bg-amber-50 border border-amber-200 rounded-[24px] p-6 shadow-sm flex flex-col items-center text-center relative overflow-hidden">
-                      <div className="absolute top-0 right-0 w-32 h-32 bg-amber-200 rounded-full blur-3xl opacity-30 -mr-16 -mt-16 pointer-events-none" />
-                      <div className="flex justify-between items-center w-full mb-6">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-amber-600 flex items-center gap-1.5 bg-amber-100 px-3 py-1.5 rounded-full shadow-sm">
+                    <div className="bg-amber-500/5 border border-amber-500/20 rounded-[24px] p-6 shadow-sm flex flex-col items-center text-center relative overflow-hidden backdrop-blur-md">
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500 rounded-full blur-[60px] opacity-20 -mr-16 -mt-16 pointer-events-none" />
+                      <div className="flex justify-between items-center w-full mb-6 relative z-10">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-amber-400 flex items-center gap-1.5 bg-amber-500/10 px-3 py-1.5 rounded-full border border-amber-500/20">
                           <Zap className="w-4 h-4" /> Il tuo Flash attivo
                         </span>
-                        <span className="text-[11px] font-bold text-amber-500 bg-amber-100/50 px-3 py-1.5 rounded-full border border-amber-200/50">
+                        <span className="text-[11px] font-bold text-amber-400/80 bg-amber-500/10 px-3 py-1.5 rounded-full border border-amber-500/20">
                           Scade: {new Date(new Date(currentFlash.created_at).getTime() + 24 * 60 * 60 * 1000).getHours()}:{String(new Date(new Date(currentFlash.created_at).getTime() + 24 * 60 * 60 * 1000).getMinutes()).padStart(2, '0')}
                         </span>
                       </div>
-                      <p className="text-[15px] font-black text-stone-800 leading-relaxed italic border-l-4 border-amber-300 pl-4 py-2 text-left w-full break-words">
+                      <p className="text-[15px] font-black text-white leading-relaxed italic border-l-4 border-amber-500/30 pl-4 py-2 text-left w-full break-words relative z-10">
                         "{currentFlash.message}"
                       </p>
                     </div>
@@ -8400,13 +8440,13 @@ const ChatPage = () => {
                           value={flashMessage}
                           onChange={(e) => setFlashMessage(e.target.value)}
                           placeholder="A cosa stai pensando? Dillo a tutti con un Flash..."
-                          className="w-full bg-stone-50 border border-stone-200 rounded-[20px] p-5 pb-12 text-[14px] text-stone-700 outline-none focus:ring-2 focus:ring-amber-400 focus:bg-white transition-all resize-none min-h-[140px] shadow-inner font-medium"
+                          className="w-full bg-white/5 border border-white/10 rounded-[20px] p-5 pb-12 text-[14px] text-white outline-none focus:ring-2 focus:ring-amber-500/50 focus:bg-white/10 transition-all resize-none min-h-[140px] shadow-inner font-medium placeholder:text-white/30 backdrop-blur-md"
                           maxLength={80}
                         />
                         <div className="absolute bottom-4 left-4 right-4 flex justify-between items-center">
                           <span className={cn(
                             "text-[10px] font-black",
-                            flashMessage.length > 70 ? "text-rose-500" : "text-stone-400"
+                            flashMessage.length > 70 ? "text-rose-500" : "text-white/30"
                           )}>
                             {80 - flashMessage.length} / 80 caratteri
                           </span>
@@ -8415,20 +8455,28 @@ const ChatPage = () => {
                       <button
                         onClick={handlePublishFlash}
                         disabled={!flashMessage.trim() || isPublishingFlash}
-                        className="w-full py-4 bg-gradient-to-r from-amber-500 to-amber-600 text-white text-[12px] font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-amber-200 hover:shadow-xl hover:from-amber-400 hover:to-amber-500 disabled:opacity-50 transition-all active:scale-95 flex items-center justify-center gap-2"
+                        className="w-full py-4 bg-gradient-to-r from-amber-500 to-amber-600 text-white text-[12px] font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-amber-500/20 hover:shadow-amber-500/40 disabled:opacity-50 transition-all active:scale-95 flex items-center justify-center gap-2"
                       >
                         {isPublishingFlash ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <><Zap className="w-5 h-5" /> Pubblica in Bacheca</>}
                       </button>
                     </div>
                   )}
+
+                  <div className="w-full flex justify-center mt-6">
+                    <button
+                      onClick={() => setActiveTab('messaggi')}
+                      className="px-6 py-2.5 rounded-full text-white/50 hover:text-white/80 transition-colors text-xs font-black uppercase tracking-widest border border-white/10 bg-white/5"
+                    >
+                      Chiudi Flash
+                    </button>
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
-          </div >
+          </div>
         )}
-      </div >
-
-    </div >
+      </div>
+    </div>
   );
 };
 
@@ -8689,9 +8737,9 @@ const ProfilePage = () => {
       const { data: profileData, error: profileErr } = await supabase
         .from('users')
         .select(`
-                            *,
-                            interactions!to_user_id(type)
-                            `)
+                                *,
+                                interactions!to_user_id(type)
+                                `)
         .eq('id', userId)
         .single();
 
@@ -8715,9 +8763,9 @@ const ProfilePage = () => {
       const { data: requestsData, error: requestsErr } = await supabase
         .from('chat_requests')
         .select(`
-                            *,
-                            from_user:users!from_user_id(name, surname, photo_url, photos)
-                            `)
+                                *,
+                                from_user:users!from_user_id(name, surname, photo_url, photos)
+                                `)
         .eq('to_user_id', userId)
         .order('created_at', { ascending: false });
 
@@ -8744,10 +8792,10 @@ const ProfilePage = () => {
         const { data: msgs } = await supabase
           .from('room_messages')
           .select(`
-                            id, text, created_at, sender_id, receiver_id,
-                            sender:users!sender_id(id, name, photos, photo_url, is_online, city),
-                            receiver:users!receiver_id(id, name, photos, photo_url, is_online, city)
-                            `)
+                                id, text, created_at, sender_id, receiver_id,
+                                sender:users!sender_id(id, name, photos, photo_url, is_online, city),
+                                receiver:users!receiver_id(id, name, photos, photo_url, is_online, city)
+                                `)
           .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
           .order('created_at', { ascending: false });
 
