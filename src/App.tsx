@@ -87,6 +87,53 @@ const normalizeUser = (u: any): any => {
   };
 };
 
+const isUserCompatible = (viewer: UserProfile, target: UserProfile): boolean => {
+  if (!viewer || !target) return false;
+  if (viewer.id === target.id) return false;
+
+  const getMacroArea = (gender: string) => {
+    const g = gender?.toLowerCase() || '';
+    if (['uomo', 'mascolino'].includes(g)) return 'M';
+    if (['donna', 'femminile'].includes(g)) return 'F';
+    if (['non-binario', 'genderfluid', 'queer', 'genderqueer', 'agender', 'bigender', 'pangender', 'neutrois', 'intersex', 'altro'].includes(g)) return 'NB';
+    if (['transgender'].includes(g)) return 'TRANS';
+    return 'NB';
+  };
+
+  const macroV = getMacroArea(viewer.gender);
+  const macroT = getMacroArea(target.gender);
+  const isWildcard = (arr: string[]) => arr.some(v => ['tutti', 'tutte', 'entrambi', 'qualsiasi', 'tutti i generi'].includes(v.toLowerCase()));
+  const targetGender = (target.gender || '').toLowerCase();
+
+  const checkOri = (myMacro: string, myOris: string[], targetMacro: string) => {
+    if (!myOris || myOris.length === 0) return true;
+    if (myMacro === 'NB' || targetMacro === 'NB') return true;
+    const oSet = new Set(myOris.map(o => o.toLowerCase()));
+    if (oSet.has('eterosessuale')) {
+      return (myMacro === 'M' && targetMacro === 'F') || (myMacro === 'F' && targetMacro === 'M') || targetMacro === 'TRANS';
+    }
+    if (oSet.has('gay') || oSet.has('lesbica')) {
+      return myMacro === targetMacro || targetMacro === 'TRANS' || targetMacro === 'NB';
+    }
+    return true;
+  };
+
+  const profileWants = (viewer.looking_for_gender || []).map((g: string) => g.toLowerCase());
+  const hasProfileWants = profileWants.length > 0 && !isWildcard(profileWants);
+
+  if (hasProfileWants) {
+    const targetAllowedByProfile = profileWants.some(pw => targetGender.startsWith(pw) || pw.startsWith(targetGender));
+    if (!targetAllowedByProfile) return false;
+
+    const orisT = target.orientation || [];
+    return checkOri(macroT, orisT, macroV);
+  }
+
+  const orisV = viewer.orientation || [];
+  const orisT = target.orientation || [];
+  return checkOri(macroV, orisV, macroT) && checkOri(macroT, orisT, macroV);
+};
+
 // ── Shared Bottom Navigation Bar ──────────────────────────────────────────
 const AppBottomNav = () => {
   const location = useLocation();
@@ -606,7 +653,13 @@ const Navbar = () => {
   const checkUser = () => {
     try {
       const saved = localStorage.getItem('soulmatch_user');
-      if (saved) setUser(normalizeUser(JSON.parse(saved)));
+      if (saved) {
+        try {
+          setUser(normalizeUser(JSON.parse(saved)));
+        } catch (e) {
+          console.error("Auth sync error:", e);
+        }
+      }
       else setUser(null);
     } catch (e) {
       setUser(null);
@@ -915,9 +968,10 @@ const HomeSlider = () => {
           className="w-full h-full object-cover"
         />
       </AnimatePresence>
-      {/* Top darken overlay for menu visibility (50-100px focus) + Bottom fade */}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/100 via-black/20 to-black" />
-      <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
+      {/* Refined cinematic overlays - deeper focus in center */}
+      <div className="absolute inset-0 bg-gradient-to-b from-black/90 via-transparent to-transparent" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-transparent to-transparent" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_30%,rgba(0,0,0,0.4)_100%)]" />
     </div>
   );
 };
@@ -1094,7 +1148,7 @@ const HomePage = () => {
             {!isLoggedIn ? (
               <Link
                 to="/register"
-                className="w-full flex items-center justify-between gap-4 bg-gradient-to-r from-rose-600 to-rose-500 text-white py-4 px-6 rounded-[22px] font-black shadow-xl shadow-rose-300/50 hover:shadow-rose-400/60 transition-all"
+                className="w-full flex items-center justify-between gap-4 bg-gradient-to-r from-rose-600 to-rose-500 text-white py-4 px-6 rounded-[22px] font-black transition-all"
               >
                 <div className="w-10 h-10 bg-white/15 rounded-[14px] flex items-center justify-center shrink-0">
                   <Heart className="w-5 h-5 fill-current" />
@@ -1667,15 +1721,24 @@ const ProfileDetailPage = () => {
 
   useEffect(() => {
     window.scrollTo(0, 0);
-    let currentUserId: string | null = null;
-    try {
-      const saved = localStorage.getItem('soulmatch_user');
-      if (saved) {
-        const user = JSON.parse(saved);
-        setCurrentUser(user);
-        currentUserId = user.id;
-      }
-    } catch (e) { }
+    const loadCurrentUser = async () => {
+      try {
+        const saved = localStorage.getItem('soulmatch_user');
+        if (saved) {
+          const u = JSON.parse(saved);
+          // Fetch real profile from DB to ensure most current data
+          const { data, error } = await supabase.from('users').select('*').eq('id', u.id).single();
+          if (data && !error) {
+            setCurrentUser(normalizeUser(data));
+            currentUserId = data.id;
+          } else {
+            setCurrentUser(normalizeUser(u));
+            currentUserId = u.id;
+          }
+        }
+      } catch (e) { }
+    };
+    loadCurrentUser();
 
     const fetchProfile = async () => {
       if (!id) return;
@@ -2140,47 +2203,47 @@ const ProfileDetailPage = () => {
             </div>
           </div>
 
-          {/* ── MATCH CORNER WIDGET ── */}
-          <div className="absolute bottom-0 right-0 z-0 pointer-events-none overflow-visible">
-            <style>{`
-              @keyframes orbitHeartB {
-              0%   { transform: rotate(0deg) translateX(137px) rotate(0deg) scale(1); opacity:0.85; }
-              50%  { transform: rotate(180deg) translateX(137px) rotate(-180deg) scale(1.2); opacity:1; }
-              100% { transform: rotate(360deg) translateX(137px) rotate(-360deg) scale(1); opacity:0.85; }
-            }
-            @keyframes heartbeatB {
-              0%   { transform: scale(1); }
-              14%  { transform: scale(1.15); }
-              28%  { transform: scale(1); }
-              42%  { transform: scale(1.1); }
-              70%  { transform: scale(1); }
-              100% { transform: scale(1); }
-            }
-            .orbit-heart-b { animation: orbitHeartB var(--dur,4.3s) linear var(--delay,0s) infinite; position:absolute; top:50%; left:50%; margin:-12px; }
-            .heart-beat-b   { animation: heartbeatB 1.4s ease-in-out infinite; transform-origin: center; }
-          `}</style>
+          {/* ── MATCH CORNER WIDGET - ONLY IF FRIENDS ── */}
+          {currentUser && soulLinkStatus === 'accepted' && (
+            <div className="absolute bottom-0 right-0 z-0 pointer-events-none overflow-visible">
+              <style>{`
+                @keyframes orbitHeartB {
+                0%   { transform: rotate(0deg) translateX(137px) rotate(0deg) scale(1); opacity:0.85; }
+                50%  { transform: rotate(180deg) translateX(137px) rotate(-180deg) scale(1.2); opacity:1; }
+                100% { transform: rotate(360deg) translateX(137px) rotate(-360deg) scale(1); opacity:0.85; }
+              }
+              @keyframes heartbeatB {
+                0%   { transform: scale(1); }
+                14%  { transform: scale(1.15); }
+                28%  { transform: scale(1); }
+                42%  { transform: scale(1.1); }
+                70%  { transform: scale(1); }
+                100% { transform: scale(1); }
+              }
+              .orbit-heart-b { animation: orbitHeartB var(--dur,4.3s) linear var(--delay,0s) infinite; position:absolute; top:50%; left:50%; margin:-12px; }
+              .heart-beat-b   { animation: heartbeatB 1.4s ease-in-out infinite; transform-origin: center; }
+            `}</style>
 
-            {/* Concave corner SVG — 462px (Reduced by 30%) */}
-            <svg width="462" height="462" viewBox="0 0 462 462" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M462 0 Q462 462 0 462 L462 462 Z" fill="url(#matchGradB)" />
-              <path d="M462 0 Q462 462 0 462 L462 462 Z" fill="url(#matchFadeB)" />
-              <defs>
-                <radialGradient id="matchGradB" cx="100%" cy="100%" r="80%">
-                  <stop offset="0%" stopColor="#f43f5e" stopOpacity="0.9" />
-                  <stop offset="55%" stopColor="#be123c" stopOpacity="0.7" />
-                  <stop offset="100%" stopColor="#0a0a0f" stopOpacity="0" />
-                </radialGradient>
-                <linearGradient id="matchFadeB" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#0a0a0f" stopOpacity="0" />
-                  <stop offset="75%" stopColor="#0a0a0f" stopOpacity="0" />
-                  <stop offset="100%" stopColor="#0a0a0f" stopOpacity="1" />
-                </linearGradient>
-              </defs>
-            </svg>
+              {/* Concave corner SVG — 462px (Reduced by 30%) */}
+              <svg width="462" height="462" viewBox="0 0 462 462" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M462 0 Q462 462 0 462 L462 462 Z" fill="url(#matchGradB)" />
+                <path d="M462 0 Q462 462 0 462 L462 462 Z" fill="url(#matchFadeB)" />
+                <defs>
+                  <radialGradient id="matchGradB" cx="100%" cy="100%" r="80%">
+                    <stop offset="0%" stopColor="#f43f5e" stopOpacity="0.9" />
+                    <stop offset="55%" stopColor="#be123c" stopOpacity="0.7" />
+                    <stop offset="100%" stopColor="#0a0a0f" stopOpacity="0" />
+                  </radialGradient>
+                  <linearGradient id="matchFadeB" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#0a0a0f" stopOpacity="0" />
+                    <stop offset="75%" stopColor="#0a0a0f" stopOpacity="0" />
+                    <stop offset="100%" stopColor="#0a0a0f" stopOpacity="1" />
+                  </linearGradient>
+                </defs>
+              </svg>
 
-            {/* Heart + score */}
-            <div className="absolute inset-0 flex items-end justify-end pb-14 pr-14">
-              {currentUser ? (
+              {/* Heart + score - ONLY IF FRIENDS */}
+              <div className="absolute inset-0 flex items-end justify-end pb-14 pr-14">
                 <div className="relative flex items-center justify-center" style={{ width: 210, height: 210, transform: 'rotate(25deg) translateX(20px) translateY(-30px)' }}>
                   {/* Dynamic hearts count: slowed duration by another 10% */}
                   {Array.from({ length: Math.max(1, Math.min(10, Math.round(matchScore / 10))) }).map((_, i) => (
@@ -2199,15 +2262,9 @@ const ProfileDetailPage = () => {
                     </span>
                   </div>
                 </div>
-              ) : (
-                <div className="relative flex items-center justify-center" style={{ width: 168, height: 168, transform: 'rotate(25deg) translateX(20px) translateY(-30px)' }}>
-                  <svg width="147" height="147" viewBox="0 0 24 24" className="heart-beat-b" style={{ filter: 'drop-shadow(0 0 22px rgba(255,255,255,0.6))' }}>
-                    <path d="M12 21.593c-5.63-5.539-11-10.297-11-14.402 0-3.791 3.068-5.191 5.281-5.191 1.312 0 4.151.501 5.719 4.457 1.59-3.968 4.464-4.447 5.726-4.447 2.54 0 5.274 1.621 5.274 5.181 0 4.069-5.136 8.625-11 14.402z" fill="rgba(255,255,255,0.75)" />
-                  </svg>
-                </div>
-              )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -2358,10 +2415,43 @@ const BachecaPage = () => {
   const [showSearch, setShowSearch] = useState(false);
   const [unlockedIds, setUnlockedIds] = useState<string[]>([]);
 
+  const [friends, setFriends] = useState<string[]>([]);
+
+  const fetchFriends = async (userId: string) => {
+    const { data } = await supabase
+      .from('soul_links')
+      .select('sender_id, receiver_id')
+      .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+      .eq('status', 'accepted');
+    if (data) {
+      setFriends(data.map(sl => sl.sender_id === userId ? sl.receiver_id : sl.sender_id));
+    }
+  };
+
   useEffect(() => {
     const saved = localStorage.getItem('soulmatch_unlocked_ids');
     if (saved) setUnlockedIds(JSON.parse(saved));
-  }, [showSoulMatch]); // Refresh when soulmatch overlay closes
+  }, [showSoulMatch]);
+
+  useEffect(() => {
+    const init = async () => {
+      const saved = localStorage.getItem('soulmatch_user');
+      if (saved) {
+        const u = JSON.parse(saved);
+        // Ensure we have REAL data from Supabase
+        const { data: realUser } = await supabase.from('users').select('*').eq('id', u.id).single();
+        if (realUser) {
+          const norm = normalizeUser(realUser);
+          setCurrentUser(norm);
+          await fetchFriends(norm.id);
+        } else {
+          setCurrentUser(normalizeUser(u));
+          await fetchFriends(u.id);
+        }
+      }
+    };
+    init();
+  }, []);
 
   const SM_COOLDOWN_KEY = 'soulmatch_last_used';
   const COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24h
@@ -2701,7 +2791,7 @@ const BachecaPage = () => {
       {/* ── HERO PHOTO SLIDER ── */}
       {!loading && heroProfile && (
 
-        <div className="relative w-full h-[80vh] min-h-[500px] overflow-hidden rounded-[40px]">
+        <div className="relative w-full h-[85vh] min-h-[550px] overflow-hidden rounded-[40px]">
           <AnimatePresence mode="sync">
             <motion.img
               key={heroProfile.id}
@@ -2713,8 +2803,11 @@ const BachecaPage = () => {
               className="absolute inset-0 w-full h-full object-cover object-top"
             />
           </AnimatePresence>
-          {/* Dark cinematic gradient - strong fade into background + top shadow */}
-          <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, transparent 25%), linear-gradient(to top, #0a0a0f 0%, #0a0a0f 5%, rgba(10,10,15,0.85) 35%, rgba(0,0,0,0.3) 65%, transparent 100%)' }} />
+          {/* Cinematic overlays - Cleared center for maximum depth/contrast */}
+          <div className="absolute inset-0" style={{
+            background: 'linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, transparent 20%, transparent 80%, rgba(10,10,15,0.9) 100%)'
+          }} />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_20%,rgba(0,0,0,0.4)_100%)]" />
 
           {/* Info overlay — clickable to navigate to profile */}
           <div
@@ -2914,7 +3007,7 @@ const BachecaPage = () => {
                 setFilterBodyType('Tutte');
                 setSearchTerm('');
                 setShowSearch(false);
-                setSelectedGenders((currentUser?.looking_for_gender || []).map((g: any) => typeof g === 'string' ? g.toLowerCase() : ''));
+                setFilterGender('Tutti');
                 setShowAdvanced(false);
               }}
               className="text-[10px] font-black uppercase tracking-widest bg-rose-600 text-white px-6 py-2.5 rounded-full shadow-lg shadow-rose-700/30 mt-4"
@@ -2957,8 +3050,8 @@ const BachecaPage = () => {
                       </div>
                     )}
 
-                    {/* Match Score Badge */}
-                    {currentUser && unlockedIds.includes(profile.id) && (
+                    {/* Match Score Badge - ONLY IF FRIENDS */}
+                    {currentUser && unlockedIds.includes(profile.id) && friends.includes(profile.id) && (
                       <div className="absolute top-0 left-0 z-20 pointer-events-none overflow-hidden rounded-tl-[22px]">
                         <svg width="80" height="80" viewBox="0 0 100 100" fill="none" className="w-[70px] h-[70px]">
                           <path d="M 0 0 L 100 0 Q 15 15 0 100 Z" fill="#e11d48" />
@@ -3226,10 +3319,34 @@ const SoulMatchPage = () => {
 
   const navigate = useNavigate();
 
-  const fetchProfiles = async () => {
+  // ── Helpers: stessa logica di compatibilità della Bacheca ──
+  const isOrientationCompatible = (viewer: UserProfile, target: UserProfile): boolean => {
+    const vOrient: string[] = Array.isArray(viewer.orientation) ? viewer.orientation : (viewer.orientation ? [viewer.orientation as any] : []);
+    const tOrient: string[] = Array.isArray(target.orientation) ? target.orientation : (target.orientation ? [target.orientation as any] : []);
+    const vGender = viewer.gender || '';
+    const tGender = target.gender || '';
+    const checkCompat = (orient: string[], subjectGender: string, targetGender: string): boolean => {
+      if (!orient.length) return true;
+      for (const o of orient) {
+        const ol = o.toLowerCase();
+        if (['bisessuale', 'pansessuale', 'polisessuale', 'fluido', 'queer', 'curioso/a', 'demisessuale', 'sapiosexual'].includes(ol)) return true;
+        if (ol === 'eterosessuale') { if (subjectGender.toLowerCase() !== targetGender.toLowerCase()) return true; }
+        else if (['gay', 'lesbica'].includes(ol)) { if (subjectGender.toLowerCase() === targetGender.toLowerCase()) return true; }
+        else return true;
+      }
+      return false;
+    };
+    return checkCompat(vOrient, vGender, tGender) && checkCompat(tOrient, tGender, vGender);
+  };
+
+  const fetchProfiles = async (viewer: UserProfile) => {
     const { data } = await supabase.from('users').select('*');
     if (data) {
-      setProfiles(data.map(u => normalizeUser(u)));
+      const all = data.map(u => normalizeUser(u));
+      // Applica compatibilità come in Bacheca
+      // Reciprocal compatibility
+      const compatible = all.filter(p => isUserCompatible(viewer, p) && (p.photos?.length || p.photo_url));
+      setProfiles(compatible);
     }
   };
 
@@ -3239,7 +3356,6 @@ const SoulMatchPage = () => {
       .select('sender_id, receiver_id')
       .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
       .eq('status', 'accepted');
-
     if (data) {
       const ids = data.map(sl => sl.sender_id === userId ? sl.receiver_id : sl.sender_id);
       setFriends(ids);
@@ -3252,7 +3368,7 @@ const SoulMatchPage = () => {
       if (saved) {
         const u = normalizeUser(JSON.parse(saved));
         setCurrentUser(u);
-        await Promise.all([fetchProfiles(), fetchFriends(u.id)]);
+        await Promise.all([fetchProfiles(u), fetchFriends(u.id)]);
       } else {
         navigate('/register');
       }
@@ -3261,19 +3377,9 @@ const SoulMatchPage = () => {
     init();
   }, [navigate]);
 
-  const genderFilter = (p: UserProfile) => {
-    if (!currentUser) return false;
-    const wantsV = (currentUser.looking_for_gender || []).map(g => g.toLowerCase());
-    const isWildcard = (arr: string[]) => arr.some(v => ['tutti', 'tutte', 'entrambi', 'qualsiasi', 'tutti i generi'].includes(v));
-    const targetGender = p.gender?.toLowerCase() || '';
-    return wantsV.length === 0 || isWildcard(wantsV) || wantsV.includes(targetGender);
-  };
-
+  // profiles già filtrati per compatibilità; filtriamo solo per mode/search
   const currentList = profiles.filter(p => {
-    if (p.id === currentUser?.id) return false;
-    if (!p.photos?.length && !p.photo_url) return false;
     if (mode === 'friends' && !friends.includes(p.id)) return false;
-    if (!genderFilter(p)) return false;
     if (searchQuery && !p.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
   });
@@ -3872,9 +3978,9 @@ const FeedPage = () => {
         ))}
       </div>
 
-      {/* ── HERO SLIDER ── */}
-      {!loading && heroProfile && (
-        <div className="relative w-full h-[65vh] min-h-[380px] overflow-hidden mt-20">
+      {/* HERO SECTION - slide limited to 3 compatible profiles */}
+      {!loading && heroProfiles.length > 0 && heroProfile && (
+        <div className="relative w-full h-[75vh] min-h-[550px] overflow-hidden">
           <AnimatePresence mode="sync">
             <motion.img
               key={heroProfile.id}
@@ -3887,7 +3993,8 @@ const FeedPage = () => {
             />
           </AnimatePresence>
           {/* Cinematic fade matching Bacheca */}
-          <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, #0a0a0f 0%, #0a0a0f 5%, rgba(10,10,15,0.85) 35%, rgba(0,0,0,0.3) 65%, transparent 100%)' }} />
+          {/* Cinematic fade - Cleared center */}
+          <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, transparent 20%, transparent 80%, #0a0a0f 100%)' }} />
 
           <div className="absolute bottom-0 left-0 right-0 px-5 pb-6 flex items-end justify-between z-10">
             <div className="flex flex-col gap-2">
@@ -5733,6 +5840,79 @@ const AdminPage = () => {
   );
 }
 
+// --- Register Helper Components ---
+const ChipScroll = ({ label, options, value, onChange, multi = false }: {
+  label: string;
+  options: string[];
+  value: string | string[];
+  onChange: (v: string | string[]) => void;
+  multi?: boolean;
+}) => {
+  const arr: string[] = multi ? (Array.isArray(value) ? value : (value ? [value as string] : [])) : [];
+  const single: string = !multi ? (value as string) : '';
+  return (
+    <div className="space-y-2">
+      <p className="text-[10px] text-rose-400 font-black uppercase tracking-widest ml-1">{label}</p>
+      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide" style={{ scrollSnapType: 'x mandatory' }}>
+        {options.map(o => {
+          const isActive = multi ? arr.includes(o) : single === o;
+          return (
+            <button key={o} type="button"
+              style={{
+                scrollSnapAlign: 'start', flexShrink: 0,
+                ...(isActive
+                  ? { background: 'rgba(244,63,94,0.25)', border: '1px solid rgba(244,63,94,0.7)', boxShadow: '0 0 12px rgba(244,63,94,0.3)' }
+                  : { background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' })
+              }}
+              onClick={() => {
+                if (!multi) { onChange(o); return; }
+                const next = arr.includes(o) ? arr.filter(x => x !== o) : [...arr, o];
+                onChange(next);
+              }}
+              className={cn(
+                "px-4 py-2.5 rounded-full text-[11px] font-black uppercase tracking-wider whitespace-nowrap transition-all",
+                isActive ? "text-rose-300" : "text-white/50"
+              )}
+            >{o}</button>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const DarkInput = ({ label, name, type = 'text', value, placeholder, onChange, disabled = false }: any) => (
+  <div className="space-y-1.5">
+    <p className="text-[10px] text-rose-400 font-black uppercase tracking-widest ml-1">{label}</p>
+    <input
+      name={name} type={type} value={value} placeholder={placeholder}
+      onChange={onChange} disabled={disabled}
+      className="w-full px-4 py-3 rounded-[16px] text-sm font-medium text-white placeholder:text-white/25 outline-none disabled:opacity-40"
+      style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+    />
+  </div>
+);
+
+const DarkSelect = ({ label, name, value, onChange, children }: any) => (
+  <div className="space-y-1.5">
+    <p className="text-[10px] text-rose-400 font-black uppercase tracking-widest ml-1">{label}</p>
+    <select name={name} value={value} onChange={onChange}
+      className="w-full px-4 py-3 rounded-[16px] text-sm font-medium text-white outline-none appearance-none"
+      style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+    >{children}</select>
+  </div>
+);
+
+const DarkTextArea = ({ label, name, value, placeholder, onChange }: any) => (
+  <div className="space-y-1.5">
+    <p className="text-[10px] text-rose-400 font-black uppercase tracking-widest ml-1">{label}</p>
+    <textarea name={name} value={value} placeholder={placeholder} onChange={onChange}
+      className="w-full px-4 py-3 rounded-[16px] text-sm font-medium text-white placeholder:text-white/25 outline-none h-20 resize-none"
+      style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+    />
+  </div>
+);
+
 const RegisterPage = () => {
   const navigate = useNavigate();
   const [step, setStep] = useState(() => {
@@ -6090,599 +6270,374 @@ const RegisterPage = () => {
 
   const isEditing = !!formData.id;
 
+  // Helper: horizontal scroll chips selector
+
+
   return (
-    <div className="min-h-screen pt-20 pb-12 px-4 bg-stone-50 flex justify-center">
+    <div className="min-h-screen pt-16 pb-12 px-4 flex justify-center" style={{ background: '#0a0a0f' }}>
       <AnimatePresence>
         {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       </AnimatePresence>
-      <div className="w-full max-w-md">
-        <div className="mb-6 flex justify-between items-end">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => navigate(-1)}
-              className="w-10 h-10 bg-white border border-stone-200 rounded-full flex items-center justify-center text-stone-600 shadow-sm hover:bg-stone-50 transition-all"
-            >
-              <ChevronRight className="w-5 h-5 rotate-180" />
-            </button>
+
+
+      {/* Floating blurred hearts background */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden z-0">
+        <style>{`
+          @keyframes floatHeartAuth {
+            0%   { transform: translateY(110vh) translateX(0px) scale(0.6) rotate(-10deg); opacity: 0; }
+            10%  { opacity: 0.18; }
+            90%  { opacity: 0.08; }
+            100% { transform: translateY(-10vh) translateX(var(--hx,20px)) scale(1.1) rotate(10deg); opacity: 0; }
+          }
+          .fh-auth { animation: floatHeartAuth var(--hd,12s) ease-in-out var(--hdelay,0s) infinite; position: absolute; bottom: -40px; }
+        `}</style>
+        {[
+          { left: '5%', size: 28, color: '#f43f5e', blur: 6, hd: 14, hdelay: 0, hx: '15px' },
+          { left: '25%', size: 16, color: '#ec4899', blur: 10, hd: 18, hdelay: 2, hx: '-20px' },
+          { left: '60%', size: 24, color: '#a855f7', blur: 12, hd: 16, hdelay: 1, hx: '25px' },
+          { left: '85%', size: 20, color: '#f43f5e', blur: 8, hd: 12, hdelay: 4, hx: '-15px' }
+        ].map((h, i) => (
+          <div key={i} className="fh-auth" style={{
+            left: h.left,
+            '--hd': `${h.hd}s`,
+            '--hdelay': `${h.hdelay}s`,
+            '--hx': h.hx,
+            filter: `blur(${h.blur}px)`,
+            opacity: 0.15
+          } as any}>
+            <Heart size={h.size} fill={h.color} color={h.color} />
+          </div>
+        ))}
+      </div>
+
+      <div className="w-full max-w-md relative z-10">
+        {/* Header */}
+        <div className="mb-6 flex justify-between items-center px-1">
+          <div className="flex items-center gap-3">
+            <button onClick={() => navigate(-1)}
+              className="w-10 h-10 rounded-full flex items-center justify-center text-white/50 hover:text-white transition-colors"
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+            ><ChevronRight className="w-5 h-5 rotate-180" /></button>
             <div>
-              <h1 className="text-2xl font-serif font-bold text-stone-900">
-                {isEditing ? 'Modifica Profilo' : 'Iscriviti'}
-              </h1>
-              <p className="text-stone-500 text-xs">Step {step} di 6</p>
+              <h1 className="text-xl font-montserrat font-black text-white">{isEditing ? 'Modifica Profilo' : 'Iscriviti'}</h1>
+              <p className="text-white/30 text-[10px] font-bold uppercase tracking-wider">Step {step} di 6</p>
             </div>
           </div>
-          <div className="flex gap-1.5 pb-1">
+          <div className="flex gap-1.5">
             {[1, 2, 3, 4, 5, 6].map(i => (
-              <div key={i} className={cn("w-2 h-2 rounded-full", step >= i ? "bg-rose-600" : "bg-stone-200")} />
+              <div key={i} className={cn("h-1 rounded-full transition-all duration-300", step >= i ? "bg-rose-500 w-5" : "bg-white/10 w-2")} />
             ))}
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-3xl border border-stone-200 shadow-lg space-y-6">
+        {/* Card */}
+        <div className="rounded-[28px] p-6 space-y-6" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(20px)' }}>
           <AnimatePresence mode="wait">
+
+            {/* ── STEP 1: Email + Password ── */}
             {step === 1 && (
-              <motion.div
-                key="step1"
-                initial={{ opacity: 0, x: 10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                className="space-y-6"
-              >
-                <div className="text-center space-y-1">
-                  <h3 className="text-xl font-bold text-stone-900">{isLogin ? 'Bentornato/a' : 'Crea Account'}</h3>
-                  <p className="text-stone-500 text-[11px]">{isLogin ? 'Inserisci i tuoi dati per accedere.' : 'Dati necessari per l\'accesso.'}</p>
-                </div>
-                <div className="space-y-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-stone-700 ml-1">Email</label>
-                    <input name="email" type="email" value={formData.email} onChange={handleInputChange} className="w-full p-3.5 rounded-xl bg-stone-50 border border-stone-200 text-sm focus:ring-2 focus:ring-rose-500 outline-none" placeholder="mario@esempio.it" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-stone-700 ml-1">Password</label>
-                    <div className="relative">
-                      <input
-                        name="password"
-                        type={showPassword ? "text" : "password"}
-                        value={formData.password}
-                        onChange={handleInputChange}
-                        className="w-full p-3.5 rounded-xl bg-stone-50 border border-stone-200 text-sm focus:ring-2 focus:ring-rose-500 outline-none pr-12"
-                        placeholder="Minimo 6 caratteri"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 transition-colors"
-                      >
-                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                      </button>
-                    </div>
-                  </div>
-                  {/* Nickname removed */}
-                </div>
-                <div className="space-y-4">
-                  <button
-                    type="button"
-                    onClick={handleNextToStep1}
-                    className="btn-primary w-full py-4 text-sm mt-2 font-black uppercase tracking-widest"
+              <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
+                <div className="text-center space-y-1 pb-2">
+                  <motion.div
+                    animate={{ scale: [1, 1.15, 1], opacity: [1, 0.8, 1] }}
+                    transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                    className="w-14 h-14 mx-auto rounded-full flex items-center justify-center mb-3"
+                    style={{ background: 'rgba(244,63,94,0.15)', border: '1px solid rgba(244,63,94,0.3)' }}
                   >
-                    {isLogin ? 'Accedi' : 'Continua'}
-                  </button>
-                  <div className="mt-4 flex justify-center">
-                    <button type="button" onClick={() => handleOAuthLogin('google')} className="flex items-center w-full justify-center gap-2 bg-white border border-stone-200 text-stone-700 py-4 rounded-xl font-black text-xs hover:border-stone-300 hover:bg-stone-50 transition-all transform active:scale-95 shadow-sm">
-                      <svg className="w-4 h-4" viewBox="0 0 24 24"><path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" /><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" /><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" /><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" /></svg>
-                      Continua con Google
+                    <Heart className="w-6 h-6 text-rose-400 fill-current" />
+                  </motion.div>
+                  <h3 className="text-xl font-montserrat font-black text-white">{isLogin ? 'Bentornato/a' : 'Crea Account'}</h3>
+                  <p className="text-white/40 text-[11px]">{isLogin ? 'Inserisci i tuoi dati per accedere.' : 'Dati necessari per l\'accesso.'}</p>
+                </div>
+                <DarkInput label="Email" name="email" type="email" value={formData.email} onChange={handleInputChange} placeholder="mario@esempio.it" />
+                <div className="space-y-1.5">
+                  <p className="text-[10px] text-rose-400 font-black uppercase tracking-widest ml-1">Password</p>
+                  <div className="relative">
+                    <input name="password" type={showPassword ? "text" : "password"} value={formData.password} onChange={handleInputChange}
+                      placeholder="Minimo 6 caratteri"
+                      className="w-full px-4 py-3 pr-12 rounded-[16px] text-sm font-medium text-white placeholder:text-white/25 outline-none"
+                      style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+                    />
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors">
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
-                  <p className="text-center text-xs text-stone-500 font-medium">
-                    {isLogin ? (
-                      <>Non hai un account? <button type="button" onClick={() => { console.log("Switching to Register"); setIsLogin(false); }} className="text-rose-600 font-bold hover:underline">Iscriviti</button></>
-                    ) : (
-                      <>Hai già un account? <button type="button" onClick={() => { console.log("Switching to Login"); setIsLogin(true); }} className="text-rose-600 font-bold hover:underline">Accedi qui</button></>
-                    )}
-                  </p>
                 </div>
+                <button type="button" onClick={handleNextToStep1}
+                  className="w-full py-4 rounded-[18px] text-sm font-black uppercase tracking-widest text-white transition-all active:scale-95"
+                  style={{ background: '#e11d48', boxShadow: '0 0 20px rgba(225,29,72,0.35)' }}
+                >{isLogin ? 'Accedi' : 'Continua →'}</button>
+                <button type="button" onClick={() => handleOAuthLogin('google')}
+                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-[18px] text-sm font-bold text-white/70 transition-all hover:text-white"
+                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" /><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" /><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" /><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" /></svg>
+                  Continua con Google
+                </button>
+                <p className="text-center text-[11px] text-white/30">
+                  {isLogin ? (<>Non hai un account? <button type="button" onClick={() => setIsLogin(false)} className="text-rose-400 font-bold">Iscriviti</button></>) : (<>Hai già un account? <button type="button" onClick={() => setIsLogin(true)} className="text-rose-400 font-bold">Accedi</button></>)}
+                </p>
               </motion.div>
             )}
 
+            {/* ── STEP 2: Dati profilo ── */}
             {step === 2 && (
-              <motion.div
-                key="step2"
-                initial={{ opacity: 0, x: 10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                className="space-y-4"
-              >
-                <div className="space-y-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-stone-700 ml-1">Nome</label>
-                    <input
-                      name="name"
-                      value={formData.name}
-                      onChange={handleInputChange}
-                      disabled={isEditing && !!formData.name}
-                      className={cn(
-                        "w-full p-3.5 rounded-xl bg-stone-50 border border-stone-200 text-sm focus:ring-2 focus:ring-rose-500 outline-none",
-                        isEditing && formData.name ? "opacity-60 cursor-not-allowed bg-stone-100" : ""
-                      )}
-                      placeholder="Mario"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-stone-700 ml-1">Cognome</label>
-                    <input
-                      name="surname"
-                      value={formData.surname}
-                      onChange={handleInputChange}
-                      disabled={isEditing && !!formData.surname}
-                      className={cn(
-                        "w-full p-3.5 rounded-xl bg-stone-50 border border-stone-200 text-sm focus:ring-2 focus:ring-rose-500 outline-none",
-                        isEditing && formData.surname ? "opacity-60 cursor-not-allowed bg-stone-100" : ""
-                      )}
-                      placeholder="Rossi"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-stone-700 ml-1">Nascita</label>
-                      <input
-                        name="dob"
-                        type="date"
-                        value={formData.dob}
-                        onChange={handleInputChange}
-                        disabled={isEditing && !!formData.dob}
-                        className={cn(
-                          "w-full p-3.5 rounded-xl bg-stone-50 border border-stone-200 text-sm focus:ring-2 focus:ring-rose-500 outline-none",
-                          isEditing && formData.dob ? "opacity-60 cursor-not-allowed bg-stone-100" : ""
-                        )}
-                      />
-                    </div>
-                    <div /> {/* Spacer to keep it half width */}
-                  </div>
-                  <div className="grid grid-cols-1 gap-3">
-                    <div className="space-y-1.5 w-full">
-                      <label className="text-xs font-bold text-stone-700 ml-1">Città</label>
-                      <select name="city" value={formData.city} onChange={handleInputChange} className="w-full p-3.5 rounded-xl bg-stone-50 border border-stone-200 text-sm focus:ring-2 focus:ring-rose-500 outline-none appearance-none">
-                        <option value="">Seleziona Città</option>
-                        {ITALIAN_CITIES.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                    </div>
-                  </div>
+              <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <DarkInput label="Nome" name="name" value={formData.name} onChange={handleInputChange} placeholder="Mario" disabled={isEditing && !!formData.name} />
+                  <DarkInput label="Cognome" name="surname" value={formData.surname} onChange={handleInputChange} placeholder="Rossi" disabled={isEditing && !!formData.surname} />
+                </div>
+                <DarkInput label="Data di Nascita" name="dob" type="date" value={formData.dob} onChange={handleInputChange} disabled={isEditing && !!formData.dob} />
+                <DarkSelect label="Città" name="city" value={formData.city} onChange={handleInputChange}>
+                  <option value="">Seleziona Città</option>
+                  {ITALIAN_CITIES.map(c => <option key={c} value={c} className="bg-stone-900">{c}</option>)}
+                </DarkSelect>
 
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-stone-700 ml-1">Identità di Genere</label>
-                    <select name="gender" value={formData.gender} onChange={handleInputChange} className="w-full p-3.5 rounded-xl bg-stone-50 border border-stone-200 text-sm focus:ring-2 focus:ring-rose-500 outline-none">
-                      <option value="Uomo">Uomo</option>
-                      <option value="Donna">Donna</option>
-                      <option value="Non-binario">Non-binario</option>
-                      <option value="Transgender (M→F)">Transgender (M→F)</option>
-                      <option value="Transgender (F→M)">Transgender (F→M)</option>
-                      <option value="Genderfluid">Genderfluid</option>
-                      <option value="Genderqueer">Genderqueer</option>
-                      <option value="Agender">Agender</option>
-                      <option value="Bigender">Bigender</option>
-                      <option value="Pangender">Pangender</option>
-                      <option value="Demi-genere">Demi-genere</option>
-                      <option value="Intersessuale">Intersessuale</option>
-                      <option value="Neutrois">Neutrois</option>
-                      <option value="Queer">Queer</option>
-                      <option value="Altro">Altro</option>
-                    </select>
-                  </div>
+                {/* Identità di Genere — scroll orizzontale */}
+                <ChipScroll
+                  label="Identità di Genere"
+                  options={['Uomo', 'Donna', 'Non-binario', 'Transgender', 'Genderfluid', 'Genderqueer', 'Agender', 'Bigender', 'Pangender', 'Demi-genere', 'Intersessuale', 'Neutrois', 'Queer', 'Altro']}
+                  value={formData.gender || ''}
+                  onChange={(v) => setFormData(p => ({ ...p, gender: v as string }))}
+                  multi={false}
+                />
 
-                  {/* Orientamento — multi-selezione */}
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-stone-700 ml-1">Orientamento Sessuale <span className="text-stone-400 font-normal">(puoi scegliere più di uno)</span></label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {['Eterosessuale', 'Gay', 'Lesbica', 'Bisessuale', 'Pansessuale', 'Asessuale', 'Demisessuale', 'Sapiosexual', 'Polisessuale', 'Queer', 'Fluido', 'Aromantic', 'Curioso/a', 'Altro'].map(o => {
-                        const cur: string[] = Array.isArray(formData.orientation) ? formData.orientation : formData.orientation ? [formData.orientation as unknown as string] : [];
-                        const sel = cur.includes(o);
-                        return (
-                          <button key={o} type="button"
-                            onClick={() => setFormData(prev => {
-                              const c: string[] = Array.isArray(prev.orientation) ? prev.orientation : prev.orientation ? [prev.orientation as unknown as string] : [];
-                              const next = c.includes(o) ? c.filter(x => x !== o) : [...c, o];
-                              return { ...prev, orientation: next };
-                            })}
-                            className={cn('flex items-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-bold transition-all text-left',
-                              sel ? 'bg-rose-600 border-rose-600 text-white' : 'bg-stone-50 border-stone-200 text-stone-500 hover:border-rose-300'
-                            )}
-                          >
-                            <span className={cn('w-4 h-4 rounded border-2 flex items-center justify-center shrink-0', sel ? 'bg-white border-white' : 'border-stone-300')}>
-                              {sel && <span className="text-rose-600 text-[10px] font-black">✓</span>}
-                            </span>
-                            {o}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
+                {/* Orientamento Sessuale — scroll orizzontale, multi */}
+                <ChipScroll
+                  label="Orientamento Sessuale (puoi sceglierne più di uno)"
+                  options={['Eterosessuale', 'Gay', 'Lesbica', 'Bisessuale', 'Pansessuale', 'Asessuale', 'Demisessuale', 'Sapiosexual', 'Polisessuale', 'Queer', 'Fluido', 'Aromantic', 'Curioso/a', 'Altro']}
+                  value={Array.isArray(formData.orientation) ? formData.orientation : (formData.orientation ? [formData.orientation as any] : [])}
+                  onChange={(v) => setFormData(p => ({ ...p, orientation: v as string[] }))}
+                  multi={true}
+                />
 
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-stone-700 ml-1">Corporatura</label>
-                    <select name="body_type" value={formData.body_type} onChange={handleInputChange} className="w-full p-3.5 rounded-xl bg-stone-50 border border-stone-200 text-sm focus:ring-2 focus:ring-rose-500 outline-none">
-                      <option value="Snella">Snella</option>
-                      <option value="Atletica">Atletica</option>
-                      <option value="Normale">Normale</option>
-                      <option value="Curvy">Curvy</option>
-                      <option value="Robusta">Robusta</option>
-                    </select>
-                  </div>
+                <DarkSelect label="Corporatura" name="body_type" value={formData.body_type} onChange={handleInputChange}>
+                  {['Snella', 'Atletica', 'Normale', 'Curvy', 'Robusta'].map(t => <option key={t} value={t} className="bg-stone-900">{t}</option>)}
+                </DarkSelect>
+                <DarkInput label="Lavoro" name="job" value={formData.job} onChange={handleInputChange} placeholder="Es. Designer" />
+                <DarkTextArea label="Descrizione" name="description" value={formData.description} onChange={handleInputChange} placeholder="Raccontaci di te..." />
 
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-stone-700 ml-1">Lavoro</label>
-                    <input name="job" value={formData.job} onChange={handleInputChange} className="w-full p-3.5 rounded-xl bg-stone-50 border border-stone-200 text-sm focus:ring-2 focus:ring-rose-500 outline-none" placeholder="Es. Designer" />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-stone-700 ml-1">Descrizione</label>
-                    <textarea name="description" value={formData.description} onChange={handleInputChange} className="w-full p-3.5 rounded-xl bg-stone-50 border border-stone-200 text-sm focus:ring-2 focus:ring-rose-500 outline-none h-20" placeholder="Raccontaci di te..." />
-                  </div>
-
-                  <div className="space-y-3">
-                    <label className="text-xs font-bold text-stone-700 ml-1">Foto Profilo (Max 5)</label>
-                    <div className="grid grid-cols-5 gap-2">
-                      {formData.photos?.map((url, i) => (
-                        <div key={i} className="aspect-square rounded-lg overflow-hidden relative group">
-                          <img src={url} className="w-full h-full object-cover" />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                            <label className="p-1.5 bg-white rounded-full text-stone-600 cursor-pointer hover:text-rose-600 shadow-sm">
-                              <RefreshCw className="w-3.5 h-3.5" />
-                              <input type="file" accept="image/*" className="hidden" onChange={(e) => replacePhoto(i, e)} />
-                            </label>
-                            <button
-                              type="button"
-                              onClick={() => removePhoto(i)}
-                              className="p-1.5 bg-white rounded-full text-stone-600 hover:text-rose-600 shadow-sm"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                          {i === 0 && <div className="absolute bottom-0 left-0 right-0 bg-rose-600 text-[8px] text-white text-center py-0.5 font-bold">Principale</div>}
+                {/* Foto */}
+                <div className="space-y-2">
+                  <p className="text-[10px] text-rose-400 font-black uppercase tracking-widest ml-1">Foto Profilo (Max 5)</p>
+                  <div className="grid grid-cols-5 gap-2">
+                    {formData.photos?.map((url, i) => (
+                      <div key={i} className="aspect-square rounded-xl overflow-hidden relative group">
+                        <img src={url} className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
+                          <label className="p-1 bg-white/90 rounded-full cursor-pointer"><RefreshCw className="w-3 h-3 text-stone-700" /><input type="file" accept="image/*" className="hidden" onChange={e => replacePhoto(i, e)} /></label>
+                          <button type="button" onClick={() => removePhoto(i)} className="p-1 bg-white/90 rounded-full"><Trash2 className="w-3 h-3 text-rose-600" /></button>
                         </div>
-                      ))}
-                      {(formData.photos?.length || 0) < 5 && (
-                        <label className="aspect-square rounded-lg border-2 border-dashed border-stone-200 flex items-center justify-center cursor-pointer hover:bg-stone-50">
-                          <UserPlus className="w-4 h-4" />
-                          <input type="file" multiple accept="image/*" className="hidden" onChange={handlePhotoUpload} />
-                        </label>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="space-y-2 p-4 bg-stone-50 rounded-2xl border border-stone-200">
-                    <div className="flex items-center gap-2 text-stone-900 text-xs font-bold mb-1">
-                      <CreditCard className="w-4 h-4" /> Documento d'Identità
-                    </div>
-                    <p className="text-[10px] text-stone-500 leading-tight mb-2">
-                      Carica un documento per la sicurezza della community.
-                    </p>
-                    <label className={cn(
-                      "w-full p-3 rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-1 cursor-pointer transition-colors",
-                      formData.id_document_url ? "border-emerald-200 bg-emerald-50" : "border-stone-200 hover:bg-stone-50"
-                    )}>
-                      {formData.id_document_url ? (
-                        <>
-                          <CheckCircle className="w-5 h-5 text-emerald-500" />
-                          <span className="text-[10px] font-bold text-emerald-700">Caricato</span>
-                        </>
-                      ) : (
-                        <>
-                          <Info className="w-5 h-5 text-stone-400" />
-                          <span className="text-[10px] font-bold text-stone-600">Seleziona File</span>
-                        </>
-                      )}
-                      <input type="file" accept=".pdf,image/*" className="hidden" onChange={handleIdUpload} />
-                    </label>
-                  </div>
-
-                  <div className="flex gap-3 pt-2">
-                    <button onClick={() => setStep(1)} className="btn-secondary flex-1 py-4 text-sm">Indietro</button>
-                    <button onClick={handleNextToStep2} className="btn-primary flex-1 py-4 text-sm">Continua</button>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            {step === 3 && (
-              <motion.div
-                key="step3"
-                initial={{ opacity: 0, x: 10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                className="space-y-5"
-              >
-                <div className="p-3 bg-rose-50 rounded-xl flex gap-2 items-start border border-rose-100">
-                  <Info className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                  <p className="text-[11px] text-rose-800 leading-tight">Dati per il matching intelligente.</p>
-                </div>
-                <div className="space-y-3">
-                  <label className="text-xs font-bold text-stone-700 ml-1">Chi cerchi? <span className="text-stone-400 font-normal">(scelta multipla)</span></label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {['Uomo', 'Donna', 'Tutti', 'Non-binario', 'Transgender', 'Genderfluid', 'Queer', 'Altro'].map(g => {
-                      const cur = Array.isArray(formData.looking_for_gender) ? formData.looking_for_gender : (formData.looking_for_gender ? [formData.looking_for_gender as any] : []);
-                      const sel = cur.includes(g);
-                      return (
-                        <button key={g} type="button"
-                          onClick={() => setFormData(prev => {
-                            const c = Array.isArray(prev.looking_for_gender) ? prev.looking_for_gender : (prev.looking_for_gender ? [prev.looking_for_gender as any] : []);
-                            let next;
-                            if (g === 'Tutti') {
-                              next = sel ? [] : ['Tutti'];
-                            } else {
-                              const withoutTutti = c.filter(x => x !== 'Tutti');
-                              next = sel ? withoutTutti.filter(x => x !== g) : [...withoutTutti, g];
-                            }
-                            return { ...prev, looking_for_gender: next };
-                          })}
-                          className={cn('py-3 px-3 rounded-xl border text-[10px] font-bold uppercase tracking-wider transition-all text-left flex items-center gap-2',
-                            sel ? 'bg-rose-600 border-rose-600 text-white' : 'bg-stone-50 border-stone-200 text-stone-500'
-                          )}
-                        >
-                          <div className={cn("w-3.5 h-3.5 rounded-sm border flex items-center justify-center shrink-0", sel ? "bg-white border-white" : "bg-white border-stone-200")}>
-                            {sel && <div className="w-1.5 h-1.5 bg-rose-600 rounded-full" />}
-                          </div>
-                          {g}
-                        </button>
-                      );
-                    })}
+                        {i === 0 && <div className="absolute bottom-0 left-0 right-0 bg-rose-600 text-[7px] text-white text-center py-0.5 font-bold">Principale</div>}
+                      </div>
+                    ))}
+                    {(formData.photos?.length || 0) < 5 && (
+                      <label className="aspect-square rounded-xl border border-dashed border-white/15 flex items-center justify-center cursor-pointer hover:border-rose-500/50 transition-colors" style={{ background: 'rgba(255,255,255,0.03)' }}>
+                        <UserPlus className="w-5 h-5 text-white/30" />
+                        <input type="file" multiple accept="image/*" className="hidden" onChange={handlePhotoUpload} />
+                      </label>
+                    )}
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-stone-700 ml-1">Età Min</label>
-                    <input name="looking_for_age_min" type="number" value={formData.looking_for_age_min} onChange={handleInputChange} className="w-full p-3.5 rounded-xl bg-stone-50 border border-stone-200 text-sm focus:ring-2 focus:ring-rose-500 outline-none" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-stone-700 ml-1">Età Max</label>
-                    <input name="looking_for_age_max" type="number" value={formData.looking_for_age_max} onChange={handleInputChange} className="w-full p-3.5 rounded-xl bg-stone-50 border border-stone-200 text-sm focus:ring-2 focus:ring-rose-500 outline-none" />
-                  </div>
+                {/* Documento */}
+                <div className="p-4 rounded-[20px] space-y-2" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  <div className="flex items-center gap-2 text-white/60 text-xs font-bold"><CreditCard className="w-4 h-4" /> Documento d'Identità</div>
+                  <p className="text-[10px] text-white/30 leading-tight">Carica un documento per la sicurezza della community.</p>
+                  <label className={cn("w-full p-3 rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-1 cursor-pointer transition-colors",
+                    formData.id_document_url ? "border-emerald-500/40 bg-emerald-500/5" : "border-white/10 hover:border-rose-500/30")}>
+                    {formData.id_document_url ? (<><CheckCircle className="w-5 h-5 text-emerald-400" /><span className="text-[10px] font-bold text-emerald-400">Caricato</span></>) : (<><Info className="w-5 h-5 text-white/30" /><span className="text-[10px] font-bold text-white/40">Seleziona File</span></>)}
+                    <input type="file" accept=".pdf,image/*" className="hidden" onChange={handleIdUpload} />
+                  </label>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-stone-700 ml-1">Altezza Preferita</label>
-                    <select name="looking_for_height" value={formData.looking_for_height} onChange={handleInputChange} className="w-full p-3.5 rounded-xl bg-stone-50 border border-stone-200 text-sm focus:ring-2 focus:ring-rose-500 outline-none">
-                      <option value="">Indifferente</option>
-                      <option value="Piccola (<160)">Piccola (&lt;160cm)</option>
-                      <option value="Media (160-175)">Media (160-175cm)</option>
-                      <option value="Alta (175-190)">Alta (175-190cm)</option>
-                      <option value="Molto Alta (>190)">Molto Alta (&gt;190cm)</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-stone-700 ml-1">Statura/Corp.</label>
-                    <select name="looking_for_body_type" value={formData.looking_for_body_type} onChange={handleInputChange} className="w-full p-3.5 rounded-xl bg-stone-50 border border-stone-200 text-sm focus:ring-2 focus:ring-rose-500 outline-none">
-                      <option value="Tutte">Tutte</option>
-                      <option value="Snella">Snella</option>
-                      <option value="Atletica">Atletica</option>
-                      <option value="Normale">Normale</option>
-                      <option value="Curvy">Curvy</option>
-                      <option value="Robusta">Robusta</option>
-                    </select>
-                  </div>
-                </div>
-                <div className="space-y-1.5 pt-2">
-                  <label className="text-xs font-bold text-stone-700 ml-1">Cosa Cerchi in un Partner?</label>
-                  <textarea name="looking_for_other" value={formData.looking_for_other} onChange={handleInputChange} className="w-full p-3.5 rounded-xl bg-stone-50 border border-stone-200 text-sm focus:ring-2 focus:ring-rose-500 outline-none h-24" placeholder="Descrivi il tuo partner ideale..." />
-                </div>
+
                 <div className="flex gap-3 pt-2">
-                  <button onClick={() => setStep(2)} className="btn-secondary flex-1 py-4 text-sm">Indietro</button>
-                  <button onClick={handleNextToStep3} className="btn-primary flex-1 py-4 text-sm">Continua</button>
+                  <button onClick={() => setStep(1)} className="flex-1 py-4 rounded-[18px] text-sm font-black text-white/50 uppercase tracking-widest" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>Indietro</button>
+                  <button onClick={handleNextToStep2} className="flex-1 py-4 rounded-[18px] text-sm font-black text-white uppercase tracking-widest" style={{ background: '#e11d48', boxShadow: '0 0 20px rgba(225,29,72,0.35)' }}>Continua →</button>
                 </div>
               </motion.div>
             )}
 
-            {step === 4 && (
-              <motion.div
-                key="step4"
-                initial={{ opacity: 0, x: 10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                className="space-y-5"
-              >
-                <div className="p-3 bg-stone-50 rounded-xl flex gap-2 items-start border border-stone-200 text-center flex-col items-center">
-                  <Sparkles className="w-5 h-5 text-rose-500 mb-1" />
-                  <h3 className="text-sm font-bold text-stone-900">Conosciamoci Meglio</h3>
-                  <p className="text-[10px] text-stone-500 leading-tight">Opzionale ma consigliato.</p>
+            {/* ── STEP 3: Preferenze Matching ── */}
+            {step === 3 && (
+              <motion.div key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
+                <div className="p-3 rounded-[16px] flex gap-2 items-start" style={{ background: 'rgba(244,63,94,0.08)', border: '1px solid rgba(244,63,94,0.2)' }}>
+                  <Info className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-rose-300 leading-tight">Questi dati determinano chi vedi nella bacheca.</p>
                 </div>
 
+                {/* Genere cercato — scroll orizzontale, multi */}
+                <ChipScroll
+                  label="Chi cerchi? (scelta multipla)"
+                  options={['Uomo', 'Donna', 'Tutti', 'Non-binario', 'Transgender', 'Genderfluid', 'Queer', 'Altro']}
+                  value={Array.isArray(formData.looking_for_gender) ? formData.looking_for_gender : (formData.looking_for_gender ? [formData.looking_for_gender as any] : [])}
+                  onChange={(v) => {
+                    const arr = v as string[];
+                    const hasTutti = arr.includes('Tutti');
+                    setFormData(p => ({ ...p, looking_for_gender: hasTutti ? ['Tutti'] : arr }));
+                  }}
+                  multi={true}
+                />
+
+                <div className="grid grid-cols-2 gap-3">
+                  <DarkInput label="Età Min" name="looking_for_age_min" type="number" value={formData.looking_for_age_min} onChange={handleInputChange} />
+                  <DarkInput label="Età Max" name="looking_for_age_max" type="number" value={formData.looking_for_age_max} onChange={handleInputChange} />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <DarkSelect label="Altezza Preferita" name="looking_for_height" value={formData.looking_for_height} onChange={handleInputChange}>
+                    <option value="" className="bg-stone-900">Indifferente</option>
+                    <option value="Piccola (<160)" className="bg-stone-900">Piccola (&lt;160cm)</option>
+                    <option value="Media (160-175)" className="bg-stone-900">Media (160-175cm)</option>
+                    <option value="Alta (175-190)" className="bg-stone-900">Alta (175-190cm)</option>
+                    <option value="Molto Alta (>190)" className="bg-stone-900">Molto Alta (&gt;190cm)</option>
+                  </DarkSelect>
+                  <DarkSelect label="Corporatura" name="looking_for_body_type" value={formData.looking_for_body_type} onChange={handleInputChange}>
+                    {['Tutte', 'Snella', 'Atletica', 'Normale', 'Curvy', 'Robusta'].map(t => <option key={t} value={t} className="bg-stone-900">{t}</option>)}
+                  </DarkSelect>
+                </div>
+                <DarkTextArea label="Cosa cerchi in un partner?" name="looking_for_other" value={formData.looking_for_other} onChange={handleInputChange} placeholder="Descrivi il partner ideale..." />
+
+                <div className="flex gap-3 pt-2">
+                  <button onClick={() => setStep(2)} className="flex-1 py-4 rounded-[18px] text-sm font-black text-white/50 uppercase tracking-widest" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>Indietro</button>
+                  <button onClick={handleNextToStep3} className="flex-1 py-4 rounded-[18px] text-sm font-black text-white uppercase tracking-widest" style={{ background: '#e11d48', boxShadow: '0 0 20px rgba(225,29,72,0.35)' }}>Continua →</button>
+                </div>
+              </motion.div>
+            )}
+
+            {/* ── STEP 4: Conosciamoci Meglio ── */}
+            {step === 4 && (
+              <motion.div key="step4" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
+                <div className="text-center space-y-1 pb-2">
+                  <Sparkles className="w-8 h-8 text-rose-400 mx-auto mb-2" />
+                  <h3 className="text-lg font-montserrat font-black text-white">Conosciamoci Meglio</h3>
+                  <p className="text-white/30 text-[11px]">Opzionale ma consigliato.</p>
+                </div>
                 {[
                   { key: 'Fumo', options: ['Non fumo', 'Occasionalmente', 'Fumo', 'Misto'] },
                   { key: 'Sport_e_Attivita', options: ['Molto Attivo/a', 'Naturale', 'Poco Sportivo/a', 'Odio lo sport'] },
                   { key: 'Animale_Domestico', options: ['Cane', 'Gatto', 'Nessuno', 'Altro'] },
                   { key: 'Stile_di_Vita', options: ['Casa e Relax', 'Viaggi ed Escursioni', 'Feste e Locali', 'Equilibrato'] },
-                  { key: 'Famiglia', options: ['Voglio figli', 'Non voglio figli', 'Posso cambiare idea', 'Ne ho già'] }
-                ].map(question => (
-                  <div key={question.key} className="space-y-1.5">
-                    <label className="text-xs font-bold text-stone-700 ml-1">{question.key.replace(/_/g, ' ')}</label>
-                    <select
-                      value={formData.conosciamoci_meglio?.[question.key] || ''}
-                      onChange={e => setFormData(prev => ({
-                        ...prev,
-                        conosciamoci_meglio: { ...(prev.conosciamoci_meglio || {}), [question.key]: e.target.value }
-                      }))}
-                      className="w-full p-3.5 rounded-xl bg-stone-50 border border-stone-200 text-sm focus:ring-2 focus:ring-rose-500 outline-none"
-                    >
-                      <option value="">-- Seleziona --</option>
-                      {question.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                    </select>
-                  </div>
+                  { key: 'Famiglia', options: ['Voglio figli', 'Non voglio figli', 'Posso cambiare idea', 'Ne ho già'] },
+                ].map(q => (
+                  <DarkSelect key={q.key} label={q.key.replace(/_/g, ' ')} name={q.key} value={formData.conosciamoci_meglio?.[q.key] || ''} onChange={(e: any) => setFormData(p => ({ ...p, conosciamoci_meglio: { ...(p.conosciamoci_meglio || {}), [q.key]: e.target.value } }))}>
+                    <option value="" className="bg-stone-900">-- Seleziona --</option>
+                    {q.options.map(o => <option key={o} value={o} className="bg-stone-900">{o}</option>)}
+                  </DarkSelect>
                 ))}
-
                 <div className="flex gap-3 pt-2">
-                  <button onClick={() => setStep(3)} className="btn-secondary flex-1 py-4 text-sm">Indietro</button>
-                  <button onClick={() => setStep(5)} className="btn-primary flex-1 py-4 text-sm">Continua</button>
+                  <button onClick={() => setStep(3)} className="flex-1 py-4 rounded-[18px] text-sm font-black text-white/50 uppercase tracking-widest" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>Indietro</button>
+                  <button onClick={() => setStep(5)} className="flex-1 py-4 rounded-[18px] text-sm font-black text-white uppercase tracking-widest" style={{ background: '#e11d48', boxShadow: '0 0 20px rgba(225,29,72,0.35)' }}>Continua →</button>
                 </div>
               </motion.div>
             )}
 
+            {/* ── STEP 5: Piano ── */}
             {step === 5 && (
-              <motion.div
-                key="step5"
-                initial={{ opacity: 0, x: 10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                className="space-y-6"
-              >
+              <motion.div key="step5" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
                 <div className="text-center space-y-1">
-                  <h3 className="text-xl font-bold text-stone-900">Piano</h3>
-                  <p className="text-stone-500 text-[11px]">Scegli come vuoi iniziare.</p>
+                  <h3 className="text-xl font-montserrat font-black text-white">Piano</h3>
+                  <p className="text-white/30 text-[11px]">Scegli come vuoi iniziare.</p>
                 </div>
-
                 <div className="space-y-3">
-                  <button
-                    onClick={() => setFormData(prev => ({ ...prev, is_paid: false }))}
-                    className={cn(
-                      "w-full p-4 rounded-2xl border-2 text-left transition-all relative",
-                      !formData.is_paid ? "border-rose-600 bg-rose-50" : "border-stone-100"
-                    )}
-                  >
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <h4 className="text-sm font-bold">Gratis</h4>
-                        <p className="text-stone-500 text-[10px]">Solo ricezione messaggi.</p>
-                      </div>
-                      <div className="text-lg font-bold">€0</div>
-                    </div>
-                    {!formData.is_paid && <CheckCircle className="absolute -top-2 -right-2 text-rose-600 w-5 h-5 bg-white rounded-full" />}
-                  </button>
-
-                  <button
-                    onClick={() => setFormData(prev => ({ ...prev, is_paid: true }))}
-                    className={cn(
-                      "w-full p-4 rounded-2xl border-2 text-left transition-all relative",
-                      formData.is_paid ? "border-rose-600 bg-rose-50" : "border-stone-100"
-                    )}
-                  >
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <div className="flex items-center gap-1.5">
-                          <h4 className="text-sm font-bold">Premium</h4>
-                          <span className="bg-rose-600 text-white text-[8px] px-1.5 py-0.5 rounded-full font-bold uppercase">Top</span>
+                  {[
+                    { label: 'Gratis', desc: 'Solo ricezione messaggi.', price: '€0', paid: false },
+                    { label: 'Premium', desc: 'Messaggi + Matching.', price: '€19.90/anno', paid: true },
+                  ].map(plan => (
+                    <button key={plan.label} onClick={() => setFormData(p => ({ ...p, is_paid: plan.paid }))}
+                      className="w-full p-4 rounded-[20px] text-left transition-all relative"
+                      style={formData.is_paid === plan.paid
+                        ? { background: 'rgba(244,63,94,0.12)', border: '1px solid rgba(244,63,94,0.5)', boxShadow: '0 0 20px rgba(244,63,94,0.15)' }
+                        : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
+                    >
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-sm font-black text-white">{plan.label}</h4>
+                            {plan.paid && <span className="bg-rose-600 text-white text-[7px] px-1.5 py-0.5 rounded-full font-black uppercase">Top</span>}
+                          </div>
+                          <p className="text-white/30 text-[10px] mt-0.5">{plan.desc}</p>
                         </div>
-                        <p className="text-stone-500 text-[10px]">Messaggi + Matching.</p>
+                        <div className="text-lg font-black text-white">{plan.price}</div>
                       </div>
-                      <div className="text-lg font-bold">€19.90<span className="text-[10px] font-normal text-stone-400">/anno</span></div>
-                    </div>
-                    {formData.is_paid && <CheckCircle className="absolute -top-2 -right-2 text-rose-600 w-5 h-5 bg-white rounded-full" />}
-                  </button>
+                      {formData.is_paid === plan.paid && <CheckCircle className="absolute -top-2 -right-2 text-rose-400 w-5 h-5" style={{ filter: 'drop-shadow(0 0 6px rgba(244,63,94,0.6))' }} />}
+                    </button>
+                  ))}
                 </div>
-
                 {formData.is_paid && (
-                  <div className="space-y-3 p-4 bg-stone-50 rounded-2xl border border-stone-200">
-                    <div className="flex items-center gap-2 text-stone-900 text-xs font-bold">
-                      <CreditCard className="w-4 h-4" /> Pagamento
-                    </div>
-                    <div className="space-y-2">
-                      <input className="w-full p-3 rounded-xl border border-stone-200 text-sm outline-none" placeholder="Numero Carta" />
-                      <div className="grid grid-cols-2 gap-2">
-                        <input className="w-full p-3 rounded-xl border border-stone-200 text-sm outline-none" placeholder="MM/AA" />
-                        <input className="w-full p-3 rounded-xl border border-stone-200 text-sm outline-none" placeholder="CVV" />
-                      </div>
+                  <div className="p-4 rounded-[20px] space-y-2" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                    <div className="flex items-center gap-2 text-white/60 text-xs font-bold"><CreditCard className="w-4 h-4" /> Pagamento</div>
+                    <input className="w-full px-4 py-3 rounded-[16px] text-sm text-white outline-none" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }} placeholder="Numero Carta" />
+                    <div className="grid grid-cols-2 gap-2">
+                      <input className="px-4 py-3 rounded-[16px] text-sm text-white outline-none" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }} placeholder="MM/AA" />
+                      <input className="px-4 py-3 rounded-[16px] text-sm text-white outline-none" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }} placeholder="CVV" />
                     </div>
                   </div>
                 )}
-
                 <div className="flex gap-3 pt-2">
-                  <button onClick={() => setStep(4)} className="btn-secondary flex-1 py-4 text-sm">Indietro</button>
-                  <button onClick={() => setStep(6)} className="btn-primary flex-1 py-4 text-sm">Riepilogo</button>
+                  <button onClick={() => setStep(4)} className="flex-1 py-4 rounded-[18px] text-sm font-black text-white/50 uppercase tracking-widest" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>Indietro</button>
+                  <button onClick={() => setStep(6)} className="flex-1 py-4 rounded-[18px] text-sm font-black text-white uppercase tracking-widest" style={{ background: '#e11d48', boxShadow: '0 0 20px rgba(225,29,72,0.35)' }}>Riepilogo →</button>
                 </div>
               </motion.div>
             )}
 
+            {/* ── STEP 6: Riepilogo ── */}
             {step === 6 && (
-              <motion.div
-                key="step6"
-                initial={{ opacity: 0, x: 10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                className="space-y-6"
-              >
+              <motion.div key="step6" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
                 <div className="text-center space-y-1">
-                  <h3 className="text-xl font-bold text-stone-900">Riepilogo Dati</h3>
-                  <p className="text-stone-500 text-[11px]">Controlla che tutto sia corretto.</p>
+                  <h3 className="text-xl font-montserrat font-black text-white">Riepilogo</h3>
+                  <p className="text-white/30 text-[11px]">Controlla che tutto sia corretto.</p>
                 </div>
-
-                <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 scrollbar-hide">
-                  <div className="p-4 bg-stone-50 rounded-2xl border border-stone-100 space-y-3">
-                    <h4 className="text-xs font-bold text-rose-600 uppercase tracking-wider">Account</h4>
-                    <div className="grid grid-cols-2 gap-y-2 text-xs">
-                      <div className="text-stone-400">Email:</div> <div className="text-stone-900 font-medium">{formData.email}</div>
-                    </div>
-                  </div>
-                  <div className="p-4 bg-stone-50 rounded-2xl border border-stone-100 space-y-3">
-                    <h4 className="text-xs font-bold text-rose-600 uppercase tracking-wider">Dati Personali</h4>
-                    <div className="grid grid-cols-2 gap-y-2 text-xs">
-                      <div className="text-stone-400">Nome:</div> <div className="text-stone-900 font-medium">{formData.name}</div>
-                      <div className="text-stone-400">Nascita:</div> <div className="text-stone-900 font-medium">{formData.dob}</div>
-                      <div className="text-stone-400">Città:</div> <div className="text-stone-900 font-medium">{formData.city}</div>
-                      <div className="text-stone-400">Genere:</div> <div className="text-stone-900 font-medium">{formData.gender}</div>
-                      <div className="text-stone-400">Orientamento:</div> <div className="text-stone-900 font-medium">{formData.orientation}</div>
-                      <div className="text-stone-400">Lavoro:</div> <div className="text-stone-900 font-medium">{formData.job}</div>
-                    </div>
-                  </div>
-
-                  {formData.conosciamoci_meglio && Object.keys(formData.conosciamoci_meglio).some(key => formData.conosciamoci_meglio[key]) && (
-                    <div className="p-4 bg-stone-50 rounded-2xl border border-stone-100 space-y-3">
-                      <h4 className="text-xs font-bold text-rose-600 uppercase tracking-wider">Conosciamoci Meglio</h4>
-                      <div className="grid grid-cols-2 gap-y-2 text-xs">
-                        {Object.entries(formData.conosciamoci_meglio).map(([key, value]) => value && (
-                          <>
-                            <div className="text-stone-400">{key.replace(/_/g, ' ')}:</div> <div className="text-stone-900 font-medium">{value}</div>
-                          </>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="p-4 bg-stone-50 rounded-2xl border border-stone-100 space-y-3">
-                    <h4 className="text-xs font-bold text-rose-600 uppercase tracking-wider">Preferenze Matching</h4>
-                    <div className="grid grid-cols-2 gap-y-2 text-xs">
-                      <div className="text-stone-400">Cerca:</div> <div className="text-stone-900 font-medium">{formData.looking_for_gender}</div>
-                      <div className="text-stone-400">Età:</div> <div className="text-stone-900 font-medium">{formData.looking_for_age_min} - {formData.looking_for_age_max}</div>
-                      <div className="text-stone-400">Altezza:</div> <div className="text-stone-900 font-medium">{formData.looking_for_height || '-'}</div>
-                      <div className="text-stone-400">Statura:</div> <div className="text-stone-900 font-medium">{formData.looking_for_body_type || '-'}</div>
-                    </div>
-                  </div>
-
-                  <div className="p-4 bg-stone-50 rounded-2xl border border-stone-100 space-y-3">
-                    <h4 className="text-xs font-bold text-rose-600 uppercase tracking-wider">Piano Scelto</h4>
-                    <div className="flex justify-between items-center">
-                      <div className="text-stone-900 font-bold">{formData.is_paid ? 'Premium' : 'Gratis'}</div>
-                      <div className="text-stone-900 font-bold">{formData.is_paid ? '€19.90/anno' : '€0'}</div>
-                    </div>
-                  </div>
-
-                  <div className="p-4 bg-stone-50 rounded-2xl border border-stone-100 space-y-3">
-                    <h4 className="text-xs font-bold text-rose-600 uppercase tracking-wider">Documento e Foto</h4>
-                    <div className="flex items-center gap-2">
-                      <div className={cn("w-2 h-2 rounded-full", formData.id_document_url ? "bg-emerald-500" : "bg-rose-500")} />
-                      <span className="text-xs text-stone-600">{formData.id_document_url ? 'Documento caricato' : 'Documento mancante'}</span>
-                    </div>
-                    <div className="flex gap-2">
-                      {formData.photos?.map((url, i) => (
-                        <div key={i} className="w-8 h-8 rounded-lg overflow-hidden border border-stone-200">
-                          <img src={url} className="w-full h-full object-cover" />
+                <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1 scrollbar-hide">
+                  {[
+                    { title: 'Account', rows: [['Email', formData.email]] },
+                    { title: 'Dati Personali', rows: [['Nome', `${formData.name} ${formData.surname}`], ['Nascita', formData.dob], ['Città', formData.city], ['Genere', formData.gender], ['Orientamento', Array.isArray(formData.orientation) ? (formData.orientation as string[]).join(', ') : formData.orientation], ['Lavoro', formData.job]] },
+                    { title: 'Cerco', rows: [['Genere', Array.isArray(formData.looking_for_gender) ? (formData.looking_for_gender as string[]).join(', ') : formData.looking_for_gender], ['Età', `${formData.looking_for_age_min}–${formData.looking_for_age_max}`]] },
+                    { title: 'Piano', rows: [['Tipo', formData.is_paid ? 'Premium' : 'Gratis'], ['Costo', formData.is_paid ? '€19.90/anno' : '€0']] },
+                  ].map(section => (
+                    <div key={section.title} className="p-4 rounded-[20px] space-y-2" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                      <h4 className="text-[9px] font-black text-rose-400 uppercase tracking-widest">{section.title}</h4>
+                      {section.rows.map(([k, v]) => v && (
+                        <div key={k} className="flex justify-between text-xs">
+                          <span className="text-white/30">{k}:</span>
+                          <span className="text-white font-bold text-right max-w-[60%]">{v}</span>
                         </div>
+                      ))}
+                    </div>
+                  ))}
+                  <div className="p-4 rounded-[20px] space-y-2" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                    <h4 className="text-[9px] font-black text-rose-400 uppercase tracking-widest">Foto & Documento</h4>
+                    <div className="flex items-center gap-2">
+                      <div className={cn("w-2 h-2 rounded-full", formData.id_document_url ? "bg-emerald-400" : "bg-rose-500")} />
+                      <span className="text-xs text-white/50">{formData.id_document_url ? 'Documento caricato' : 'Nessun documento'}</span>
+                    </div>
+                    <div className="flex gap-1.5">
+                      {formData.photos?.map((url, i) => (
+                        <div key={i} className="w-8 h-8 rounded-lg overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.1)' }}><img src={url} className="w-full h-full object-cover" /></div>
                       ))}
                     </div>
                   </div>
                 </div>
-
                 <div className="flex gap-3 pt-2">
-                  <button onClick={() => setStep(5)} className="btn-secondary flex-1 py-4 text-sm">Indietro</button>
-                  <button onClick={handleSubmit} className="btn-primary flex-1 py-4 text-sm">Termina</button>
+                  <button onClick={() => setStep(5)} className="flex-1 py-4 rounded-[18px] text-sm font-black text-white/50 uppercase tracking-widest" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>Indietro</button>
+                  <button onClick={handleSubmit} className="flex-1 py-4 rounded-[18px] text-sm font-black text-white uppercase tracking-widest" style={{ background: '#e11d48', boxShadow: '0 0 20px rgba(225,29,72,0.35)' }}>Termina ✓</button>
                 </div>
               </motion.div>
             )}
+
           </AnimatePresence>
         </div>
       </div>
-    </div >
+    </div>
   );
 };
 
+
+
+
+
+
 const FeedComponent = ({ userId, isOwner, global = false }: { userId: any, isOwner?: boolean, global?: boolean }) => {
+
   const [posts, setPosts] = useState<Post[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [showSearch, setShowSearch] = useState(false);
@@ -6709,7 +6664,7 @@ const FeedComponent = ({ userId, isOwner, global = false }: { userId: any, isOwn
     try {
       const { data, error } = await supabase
         .from('post_comments')
-        .select('*, user:users(name, photos, photo_url)')
+        .select('*, user:users(name, photos)')
         .eq('post_id', postId)
         .order('created_at', { ascending: true });
 
@@ -6768,11 +6723,11 @@ const FeedComponent = ({ userId, isOwner, global = false }: { userId: any, isOwn
       let query = supabase
         .from('posts')
         .select(`
-                    *,
-                    user:users (name, photos, photo_url, gender, orientation),
-                    post_interactions!post_interactions_post_id_fkey(type),
-                    post_comments(id)
-                    `)
+            *,
+            user:users (name, photos, photo_url, gender, orientation),
+            post_interactions!post_interactions_post_id_fkey(type),
+            post_comments(id)
+            `)
         .order('created_at', { ascending: false });
 
       if (!global) {
@@ -6805,7 +6760,13 @@ const FeedComponent = ({ userId, isOwner, global = false }: { userId: any, isOwn
           has_liked: viewerInteractions.some(i => i.post_id === p.id && i.type === 'like'),
           has_hearted: viewerInteractions.some(i => i.post_id === p.id && i.type === 'heart'),
         }));
-        setPosts(processed);
+
+        // Filter by compatibility for global feed
+        const filtered = (global && viewer)
+          ? processed.filter(p => isUserCompatible(normalizeUser(viewer), normalizeUser(p.user)))
+          : processed;
+
+        setPosts(filtered);
       }
       else if (error) {
         console.error("Fetch posts error:", error);
@@ -7773,9 +7734,9 @@ const ChatPage = () => {
       const { data: requestsData } = await supabase
         .from('chat_requests')
         .select(`
-                      *,
-                      from_user:users!from_user_id(id, name, surname, photo_url, photos)
-                      `)
+                    *,
+                    from_user:users!from_user_id(id, name, surname, photo_url, photos)
+                    `)
         .eq('to_user_id', userId)
         .order('created_at', { ascending: false });
 
@@ -7798,10 +7759,10 @@ const ChatPage = () => {
       const { data: msgs } = await supabase
         .from('room_messages')
         .select(`
-                      id, text, created_at, sender_id, receiver_id,
-                      sender:users!sender_id(id, name, photos, photo_url, is_online, city),
-                      receiver:users!receiver_id(id, name, photos, photo_url, is_online, city)
-                      `)
+                    id, text, created_at, sender_id, receiver_id,
+                    sender:users!sender_id(id, name, photos, photo_url, is_online, city),
+                    receiver:users!receiver_id(id, name, photos, photo_url, is_online, city)
+                    `)
         .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
         .order('created_at', { ascending: false });
 
@@ -8734,9 +8695,9 @@ const ProfilePage = () => {
       const { data: profileData, error: profileErr } = await supabase
         .from('users')
         .select(`
-            *,
-            interactions!to_user_id(type)
-            `)
+                            *,
+                            interactions!to_user_id(type)
+                            `)
         .eq('id', userId)
         .single();
 
@@ -8760,9 +8721,9 @@ const ProfilePage = () => {
       const { data: requestsData, error: requestsErr } = await supabase
         .from('chat_requests')
         .select(`
-            *,
-            from_user:users!from_user_id(name, surname, photo_url, photos)
-            `)
+                            *,
+                            from_user:users!from_user_id(name, surname, photo_url, photos)
+                            `)
         .eq('to_user_id', userId)
         .order('created_at', { ascending: false });
 
@@ -8789,10 +8750,10 @@ const ProfilePage = () => {
         const { data: msgs } = await supabase
           .from('room_messages')
           .select(`
-            id, text, created_at, sender_id, receiver_id,
-            sender:users!sender_id(id, name, photos, photo_url, is_online, city),
-            receiver:users!receiver_id(id, name, photos, photo_url, is_online, city)
-            `)
+                            id, text, created_at, sender_id, receiver_id,
+                            sender:users!sender_id(id, name, photos, photo_url, is_online, city),
+                            receiver:users!receiver_id(id, name, photos, photo_url, is_online, city)
+                            `)
           .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
           .order('created_at', { ascending: false });
 
@@ -8822,9 +8783,9 @@ const ProfilePage = () => {
       const { data: soulLinksData } = await supabase
         .from('soul_links')
         .select(`
-          id, status, created_at,
-          requester:users!user_id(id, name, photos, photo_url, city, is_online, dob)
-        `)
+                            id, status, created_at,
+                            requester:users!user_id(id, name, photos, photo_url, city, is_online, dob)
+                            `)
         .eq('friend_id', userId)
         .eq('status', 'pending');
       if (soulLinksData) setSoulLinkRequests(soulLinksData);
