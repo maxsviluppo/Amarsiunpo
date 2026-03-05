@@ -1721,105 +1721,104 @@ const ProfileDetailPage = () => {
 
   useEffect(() => {
     window.scrollTo(0, 0);
-    const loadCurrentUser = async () => {
+    const init = async () => {
+      let currentUserId: string | null = null;
+
+      // 1. Get Current User and ensure real-time data from Supabase
       try {
         const saved = localStorage.getItem('soulmatch_user');
         if (saved) {
           const u = JSON.parse(saved);
-          // Fetch real profile from DB to ensure most current data
           const { data, error } = await supabase.from('users').select('*').eq('id', u.id).single();
           if (data && !error) {
-            setCurrentUser(normalizeUser(data));
-            currentUserId = data.id;
+            const norm = normalizeUser(data);
+            setCurrentUser(norm);
+            currentUserId = norm.id;
           } else {
-            setCurrentUser(normalizeUser(u));
-            currentUserId = u.id;
+            const norm = normalizeUser(u);
+            setCurrentUser(norm);
+            currentUserId = norm.id;
           }
         }
-      } catch (e) { }
-    };
-    loadCurrentUser();
-
-    const fetchProfile = async () => {
-      if (!id) return;
-
-      // Safety: check if ID is UUID. Simulated IDs like "5" will fail in UUID columns.
-      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-
-      if (!isUUID) {
-        setProfile(null);
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const { data: userProfile, error } = await supabase
-          .from('users')
-          .select(`
-            *,
-            interactions!to_user_id(type)
-          `)
-          .eq('id', id)
-          .single();
-
-        if (error) console.error("ProfileDetail fetch error:", error);
-
-        if (userProfile && !error) {
-          const profileWithCounts = {
-            ...userProfile,
-            likes_count: (userProfile.interactions as any[] || []).filter(i => i.type === 'like').length,
-            hearts_count: (userProfile.interactions as any[] || []).filter(i => i.type === 'heart').length
-          };
-          setProfile(normalizeUser(profileWithCounts));
-        }
-        else {
-          console.warn("No detail profile found for ID:", id);
-        }
       } catch (e) {
-        console.error("ProfileDetail fetch exception:", e);
+        console.error("ProfileDetail init user error:", e);
       }
-      setLoading(false);
-    };
 
-    const fetchStatus = async () => {
-      if (!currentUserId || !id) return;
-
-      const { data } = await supabase
-        .from('chat_requests')
-        .select('status')
-        .eq('from_user_id', currentUserId)
-        .eq('to_user_id', id)
-        .single();
-
-      if (data) setChatStatus(data.status);
-      else setChatStatus('none');
-
-      fetchInteractionState(currentUserId);
-
-      // Fetch SoulLink status
-      const { data: slData } = await supabase
-        .from('soul_links')
-        .select('id, sender_id, receiver_id, status')
-        .or(`and(sender_id.eq.${currentUserId},receiver_id.eq.${id}),and(sender_id.eq.${id},receiver_id.eq.${currentUserId})`)
-        .single();
-
-      if (slData) {
-        setSoulLinkId(slData.id);
-        if (slData.status === 'accepted') {
-          setSoulLinkStatus('accepted');
-        } else if (slData.status === 'pending') {
-          setSoulLinkStatus(slData.sender_id === currentUserId ? 'pending_sent' : 'pending_received');
-        } else {
-          setSoulLinkStatus('rejected');
+      // 2. Fetch Profile Detail
+      if (id) {
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+        if (!isUUID) {
+          setProfile(null);
+          setLoading(false);
+          return;
         }
-      } else {
-        setSoulLinkStatus('none');
-        setSoulLinkId(null);
+
+        try {
+          const { data: userProfile, error } = await supabase
+            .from('users')
+            .select(`
+              *,
+              interactions!to_user_id(type)
+            `)
+            .eq('id', id)
+            .single();
+
+          if (userProfile && !error) {
+            const profileWithCounts = {
+              ...userProfile,
+              likes_count: (userProfile.interactions as any[] || []).filter(i => i.type === 'like').length,
+              hearts_count: (userProfile.interactions as any[] || []).filter(i => i.type === 'heart').length
+            };
+            setProfile(normalizeUser(profileWithCounts));
+          }
+        } catch (e) {
+          console.error("ProfileDetail fetch profile error:", e);
+        }
+        setLoading(false);
+      }
+
+      // 3. Fetch Status (Chat, Interactions, SoulLinks)
+      if (currentUserId && id && currentUserId !== id) {
+        try {
+          // Chat Requests
+          const { data: chatData } = await supabase
+            .from('chat_requests')
+            .select('status')
+            .eq('from_user_id', currentUserId)
+            .eq('to_user_id', id)
+            .maybeSingle();
+          if (chatData) setChatStatus(chatData.status);
+
+          // Interactions (Likes/Hearts)
+          fetchInteractionState(currentUserId);
+
+          // SoulLinks (Friendships)
+          const { data: slData } = await supabase
+            .from('soul_links')
+            .select('id, sender_id, receiver_id, status')
+            .or(`and(sender_id.eq.${currentUserId},receiver_id.eq.${id}),and(sender_id.eq.${id},receiver_id.eq.${currentUserId})`)
+            .maybeSingle();
+
+          if (slData) {
+            setSoulLinkId(slData.id);
+            if (slData.status === 'accepted') {
+              setSoulLinkStatus('accepted');
+            } else if (slData.status === 'pending') {
+              setSoulLinkStatus(slData.sender_id === currentUserId ? 'pending_sent' : 'pending_received');
+            } else {
+              setSoulLinkStatus('rejected');
+            }
+          } else {
+            setSoulLinkStatus('none');
+            setSoulLinkId(null);
+          }
+        } catch (e) {
+          console.error("ProfileDetail status fetch error:", e);
+        }
       }
     };
 
-    fetchProfile();
-    fetchStatus();
+    init();
   }, [id]);
 
   const handleSendSoulLink = async () => {
