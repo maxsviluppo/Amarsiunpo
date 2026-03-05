@@ -2807,7 +2807,7 @@ const BachecaPage = () => {
           <div className="absolute inset-0" style={{
             background: 'linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, transparent 20%, transparent 80%, rgba(10,10,15,0.9) 100%)'
           }} />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_20%,rgba(0,0,0,0.4)_100%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_35%,rgba(0,0,0,0.6)_100%)] opacity-70" />
 
           {/* Info overlay — clickable to navigate to profile */}
           <div
@@ -3935,7 +3935,12 @@ const FeedPage = () => {
     return () => clearInterval(interval);
   }, [bannerMessages]);
 
-  const heroProfiles = profiles.slice(0, Math.min(5, profiles.length));
+  const heroProfiles = useMemo(() => {
+    if (!currentUser) return profiles.slice(0, 5);
+    return profiles
+      .filter(p => p.id === currentUser.id || isUserCompatible(currentUser, p))
+      .slice(0, 5);
+  }, [profiles, currentUser]);
   useEffect(() => {
     if (heroProfiles.length < 2) return;
     const timer = setInterval(() => setHeroIndex(i => (i + 1) % heroProfiles.length), 4000);
@@ -3992,9 +3997,9 @@ const FeedPage = () => {
               className="absolute inset-0 w-full h-full object-cover object-top"
             />
           </AnimatePresence>
-          {/* Cinematic fade matching Bacheca */}
-          {/* Cinematic fade - Cleared center */}
-          <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, transparent 20%, transparent 80%, #0a0a0f 100%)' }} />
+          {/* Cinematic fade - Cleared center for depth */}
+          <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, transparent 25%, transparent 75%, #0a0a0f 100%)' }} />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_35%,rgba(0,0,0,0.6)_100%)] opacity-60" />
 
           <div className="absolute bottom-0 left-0 right-0 px-5 pb-6 flex items-end justify-between z-10">
             <div className="flex flex-col gap-2">
@@ -6763,7 +6768,7 @@ const FeedComponent = ({ userId, isOwner, global = false }: { userId: any, isOwn
 
         // Filter by compatibility for global feed
         const filtered = (global && viewer)
-          ? processed.filter(p => isUserCompatible(normalizeUser(viewer), normalizeUser(p.user)))
+          ? processed.filter(p => p.user_id === viewer.id || isUserCompatible(normalizeUser(viewer), normalizeUser(p.user)))
           : processed;
 
         setPosts(filtered);
