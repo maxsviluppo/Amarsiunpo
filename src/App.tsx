@@ -457,6 +457,7 @@ const GlobalFlashBanner = () => {
   const [isPublishingModalOpen, setIsPublishingModalOpen] = useState(false);
   const [flashMessage, setFlashMessage] = useState('');
   const [isPublishingFlash, setIsPublishingFlash] = useState(false);
+  const [flashToast, setFlashToast] = useState<{ message: string, type: 'success' | 'error' | 'info' } | null>(null);
 
   // Show ONLY on /bacheca
   const isBacheca = location.pathname.startsWith('/bacheca');
@@ -538,6 +539,7 @@ const GlobalFlashBanner = () => {
   return (
     <div className="fixed bottom-[140px] right-0 z-[9999] pointer-events-none">
       <PremiumModal isOpen={showPremiumModal} onClose={() => setShowPremiumModal(false)} />
+      {flashToast && <Toast message={flashToast.message} type={flashToast.type} onClose={() => setFlashToast(null)} />}
       
       {/* Modulo Inserimento Flash */}
       <AnimatePresence>
@@ -688,9 +690,10 @@ const GlobalFlashBanner = () => {
                     if (diffHours > 0) {
                       const remainingHours = Math.floor(diffHours);
                       const remainingMins = Math.ceil((diffHours - remainingHours) * 60);
-                      // Use a clean native alert rather than breaking the UI, but it would be better with a Toast. 
-                      // Wait! The user asked "fai apparire un avviso" which can be an alert or toast. Alert is okay here for simplicity!
-                      alert(`🚫 Attenzione! Devi attendere ancora ${remainingHours}h e ${remainingMins}m prima di poter pubblicare un nuovo Flash.`);
+                      setFlashToast({ 
+                        message: `Attenzione! Devi attendere ancora ${remainingHours}h e ${remainingMins}m prima di poter pubblicare un nuovo Flash.`, 
+                        type: 'info' 
+                      });
                       return;
                     }
                   }
@@ -5018,9 +5021,10 @@ const AdminPage = () => {
       premium: users.filter(u => u.is_paid).length,
       suspended: users.filter(u => u.is_suspended || u.is_blocked).length,
       pendingDocs: users.filter(u => u.id_document_url && !u.is_validated && !u.doc_rejected).length,
+      pendingReports: reports.filter(r => !r.is_read).length,
       revenue: users.filter(u => u.is_paid).length * 9.99,
     };
-  }, [users]);
+  }, [users, reports]);
 
   // Modals / Specific UI
   const [activeTab, setActiveTab] = useState<'dashboard' | 'utenti' | 'documenti' | 'segnalazioni' | 'pagamenti' | 'impostazioni'>('dashboard');
@@ -5088,7 +5092,7 @@ const AdminPage = () => {
         }
       });
 
-      const { data: repData } = await supabase.from('reports').select('*');
+      const { data: repData } = await supabase.from('reports').select('*').order('created_at', { ascending: false });
       setReports(repData || []);
       
       setUsers(combined);
@@ -5099,6 +5103,23 @@ const AdminPage = () => {
       setToast({ message: "Errore caricamento dati.", type: 'error' });
     }
     setLoadingData(false);
+  };
+
+  const fetchReports = async () => {
+    try {
+      const { data } = await supabase.from('reports').select('*').order('created_at', { ascending: false });
+      if (data) setReports(data);
+    } catch (e) { }
+  };
+
+  const handleMarkReportRead = async (reportId: string, isRead: boolean) => {
+    try {
+      const { error } = await supabase.from('reports').update({ is_read: isRead }).eq('id', reportId);
+      if (!error) {
+        setReports(prev => prev.map(r => r.id === reportId ? { ...r, is_read: isRead } : r));
+        setToast({ message: isRead ? "Segnalazione archiviata." : "Segnalazione riaperta.", type: 'info' });
+      }
+    } catch (e) { }
   };
 
   const handleDeleteUser = async (userId: string) => {
@@ -5439,7 +5460,7 @@ const AdminPage = () => {
               { key: 'dashboard', label: 'Dashboard', icon: LayoutGrid },
               { key: 'utenti', label: 'Utenti Iscritti', icon: Users },
               { key: 'documenti', label: 'Validazione ID', icon: ShieldCheck, badge: stats.pendingDocs },
-              { key: 'segnalazioni', label: 'Segnalazioni', icon: AlertTriangle },
+              { key: 'segnalazioni', label: 'Segnalazioni', icon: AlertTriangle, badge: stats.pendingReports },
               { key: 'pagamenti', label: 'Abbonamenti', icon: CreditCard },
               { key: 'impostazioni', label: 'Slider Home', icon: ImageIcon },
             ] as Array<{ key: string, label: string, icon: any, badge?: number }>).map(({ key, label, icon: Icon, badge }) => (
@@ -6160,21 +6181,63 @@ const AdminPage = () => {
                           <table className="w-full text-sm font-medium whitespace-nowrap">
                             <thead>
                               <tr className="text-stone-400 border-b border-stone-100 uppercase tracking-widest text-[10px]">
+                                <th className="py-3 px-4 text-left">Stato</th>
                                 <th className="py-3 px-4 text-left">Data</th>
-                                <th className="py-3 px-4 text-left">Reported ID</th>
-                                <th className="py-3 px-4 text-left">Reporter ID</th>
+                                <th className="py-3 px-4 text-left">Segnalato</th>
+                                <th className="py-3 px-4 text-left">Segnalante</th>
                                 <th className="py-3 px-4 text-left">Motivo</th>
+                                <th className="py-3 px-4 text-center">Azioni</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {reports.map((r: any) => (
-                                <tr key={r.id} className="border-b border-stone-50 hover:bg-stone-50 text-stone-700">
-                                  <td className="py-4 px-4">{new Date(r.created_at).toLocaleDateString()}</td>
-                                  <td className="py-4 px-4 truncate max-w-[100px]">{r.reported_id}</td>
-                                  <td className="py-4 px-4 truncate max-w-[100px]">{r.reporter_id}</td>
-                                  <td className="py-4 px-4 break-words whitespace-normal">{r.reason}</td>
-                                </tr>
-                              ))}
+                              {reports.map((r: any) => {
+                                const reportedUser = users.find(u => u.id === r.reported_id);
+                                const reporterUser = users.find(u => u.id === r.reporter_id);
+                                return (
+                                  <tr key={r.id} className={cn("border-b border-stone-50 hover:bg-stone-50 text-stone-700 transition-colors", r.is_read ? "opacity-50" : "bg-rose-50/10")}>
+                                    <td className="py-4 px-4 text-center">
+                                      <div className={cn("w-2 h-2 rounded-full mx-auto", r.is_read ? "bg-stone-300" : "bg-rose-600 animate-pulse")} />
+                                    </td>
+                                    <td className="py-4 px-4">{new Date(r.created_at).toLocaleDateString()}</td>
+                                    <td className="py-4 px-4">
+                                      {reportedUser ? (
+                                        <div className="flex items-center gap-2">
+                                          <img src={reportedUser.photo_url || `https://ui-avatars.com/api/?name=${reportedUser.name}+${reportedUser.surname}`} className="w-6 h-6 rounded-full object-cover" />
+                                          <div className="flex flex-col">
+                                            <span className="font-bold text-stone-900">{reportedUser.name} {reportedUser.surname}</span>
+                                            <span className="text-[10px] text-rose-500 font-bold uppercase tracking-widest">Tot. Report: {reportedUser.reports_count || 0}</span>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <span className="text-stone-300 italic">{r.reported_id}</span>
+                                      )}
+                                    </td>
+                                    <td className="py-4 px-4">
+                                      {reporterUser ? (
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-stone-900">{reporterUser.name} {reporterUser.surname}</span>
+                                        </div>
+                                      ) : (
+                                        <span className="text-stone-300 italic">{r.reporter_id}</span>
+                                      )}
+                                    </td>
+                                    <td className="py-4 px-4 break-words whitespace-normal text-xs leading-relaxed max-w-[200px]">
+                                      {r.reason}
+                                    </td>
+                                    <td className="py-4 px-4 text-center">
+                                      <button 
+                                        onClick={() => handleMarkReportRead(r.id, !r.is_read)}
+                                        className={cn(
+                                          "px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                                          r.is_read ? "bg-stone-100 text-stone-500 hover:bg-stone-200" : "bg-rose-600 text-white hover:bg-rose-700 shadow-md shadow-rose-900/10"
+                                        )}
+                                      >
+                                        {r.is_read ? "Riapri" : "Segna come letto"}
+                                      </button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
                             </tbody>
                           </table>
                         </div>
