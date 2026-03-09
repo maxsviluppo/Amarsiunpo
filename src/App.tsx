@@ -5018,11 +5018,11 @@ const AdminPage = () => {
     return {
       total: users.length,
       verified: users.filter(u => u.is_validated).length,
-      premium: users.filter(u => u.is_paid).length,
+      premium: 0, // Reset for testing: users.filter(u => u.is_paid).length, 
       suspended: users.filter(u => u.is_suspended || u.is_blocked).length,
       pendingDocs: users.filter(u => u.id_document_url && !u.is_validated && !u.doc_rejected).length,
       pendingReports: reports.filter(r => !r.is_read).length,
-      revenue: users.filter(u => u.is_paid).length * 9.99,
+      revenue: 0, // Reset for testing: users.filter(u => u.is_paid).length * 9.99,
     };
   }, [users, reports]);
 
@@ -6156,7 +6156,7 @@ const AdminPage = () => {
                         )}
                       </div>
                     )}
-                  </div>
+                      </div>
                 );
               })()}
 
@@ -6175,9 +6175,8 @@ const AdminPage = () => {
                       </div>
                     </div>
 
-                    <div className="flex flex-col items-center justify-center py-12 px-2 text-center border-2 border-dashed border-stone-100 rounded-[32px] bg-stone-50/30">
                       {reports && reports.length > 0 ? (
-                        <div className="w-full space-y-4 text-left">
+                        <div className="w-full space-y-6 text-left">
                           {reports.map((r: any) => {
                             const reportedUser = users.find(u => u.id === r.reported_id);
                             const reporterUser = users.find(u => u.id === r.reporter_id);
@@ -6185,39 +6184,45 @@ const AdminPage = () => {
                               <div 
                                 key={r.id} 
                                 className={cn(
-                                  "bg-white rounded-3xl p-5 border shadow-sm transition-all relative overflow-hidden",
+                                  "bg-white rounded-[40px] p-6 md:p-8 border shadow-sm transition-all relative overflow-hidden",
                                   r.is_read ? "border-stone-100 opacity-70" : "border-rose-100 bg-rose-50/5"
                                 )}
                               >
                                 {!r.is_read && (
-                                  <div className="absolute top-0 right-0 px-3 py-1 bg-rose-600 text-[8px] font-black text-white uppercase tracking-widest rounded-bl-xl">
-                                    Nuovo
+                                  <div className="absolute top-0 right-0 px-5 py-2 bg-rose-600 text-[10px] font-black text-white uppercase tracking-widest rounded-bl-3xl">
+                                    Nuovo Report
                                   </div>
                                 )}
                                 
-                                <div className="flex flex-col gap-5">
+                                <div className="flex flex-col gap-6">
                                   {/* Header: Date and Report Count */}
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">
-                                      {new Date(r.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
-                                    </span>
+                                  <div className="flex items-center justify-between border-b border-stone-50 pb-4">
+                                    <div className="flex items-center gap-2">
+                                      <Calendar className="w-3.5 h-3.5 text-stone-300" />
+                                      <span className="text-[11px] font-black text-stone-400 uppercase tracking-widest">
+                                        {new Date(r.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}
+                                      </span>
+                                    </div>
                                     {reportedUser && (
-                                      <div className="flex items-center gap-1.5 px-2.5 py-1 bg-rose-50 text-rose-600 rounded-lg border border-rose-100">
-                                        <AlertTriangle className="w-3 h-3" />
-                                        <span className="text-[10px] font-black uppercase tracking-tight">Report: {reportedUser.reports_count || 0}</span>
+                                      <div className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 text-rose-600 rounded-xl border border-rose-100">
+                                        <AlertTriangle className="w-3.5 h-3.5" />
+                                        <span className="text-[11px] font-black uppercase tracking-tight">Report Totali: {reportedUser.reports_count || 0}</span>
                                       </div>
                                     )}
                                   </div>
 
-                                  {/* Actors Grid */}
-                                  <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                      <p className="text-[8px] font-black text-stone-400 uppercase tracking-tighter">Segnalato</p>
+                                  {/* Actors Grid - More spacious */}
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="bg-stone-50/50 p-4 rounded-3xl border border-stone-100">
+                                      <p className="text-[9px] font-black text-stone-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-rose-500" /> Utente Segnalato
+                                      </p>
                                       {reportedUser ? (
-                                        <div className="flex items-center gap-2">
-                                          <img src={reportedUser.photo_url || `https://ui-avatars.com/api/?name=${reportedUser.name}+${reportedUser.surname}`} className="w-8 h-8 rounded-xl object-cover border border-stone-100" />
+                                        <div className="flex items-center gap-3">
+                                          <img src={reportedUser.photo_url || `https://ui-avatars.com/api/?name=${reportedUser.name}+${reportedUser.surname}`} className="w-12 h-12 rounded-2xl object-cover border-2 border-white shadow-sm" />
                                           <div className="min-w-0">
-                                            <p className="text-xs font-black text-stone-900 truncate">{reportedUser.name} {reportedUser.surname}</p>
+                                            <p className="text-sm font-black text-stone-900 truncate">{reportedUser.name} {reportedUser.surname}</p>
+                                            <p className="text-[10px] text-stone-400 font-bold truncate">{reportedUser.email}</p>
                                           </div>
                                         </div>
                                       ) : (
@@ -6225,15 +6230,18 @@ const AdminPage = () => {
                                       )}
                                     </div>
 
-                                    <div className="space-y-2">
-                                      <p className="text-[8px] font-black text-stone-400 uppercase tracking-tighter">Da parte di</p>
+                                    <div className="bg-stone-50/50 p-4 rounded-3xl border border-stone-100">
+                                      <p className="text-[9px] font-black text-stone-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Inviata da
+                                      </p>
                                       {reporterUser ? (
-                                        <div className="flex items-center gap-2">
-                                          <div className="w-8 h-8 rounded-xl bg-stone-100 flex items-center justify-center shrink-0">
-                                            <User className="w-4 h-4 text-stone-400" />
+                                        <div className="flex items-center gap-3">
+                                          <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center shrink-0 border border-stone-100 shadow-sm">
+                                            <User className="w-6 h-6 text-stone-400" />
                                           </div>
                                           <div className="min-w-0">
-                                            <p className="text-xs font-bold text-stone-600 truncate">{reporterUser.name} {reporterUser.surname}</p>
+                                            <p className="text-sm font-bold text-stone-600 truncate">{reporterUser.name} {reporterUser.surname}</p>
+                                            <p className="text-[10px] text-stone-400 font-bold truncate">Utente Attivo</p>
                                           </div>
                                         </div>
                                       ) : (
@@ -6242,33 +6250,35 @@ const AdminPage = () => {
                                     </div>
                                   </div>
 
-                                  {/* Reason */}
-                                  <div className="bg-stone-50 rounded-2xl p-4 border border-stone-100">
-                                    <p className="text-[11px] text-stone-700 leading-relaxed italic font-medium">"{r.reason}"</p>
+                                  {/* Reason - Full Width Box */}
+                                  <div className="bg-stone-900 rounded-3xl p-6 text-white relative overflow-hidden group">
+                                    <div className="absolute top-0 left-0 w-1 h-full bg-rose-500" />
+                                    <p className="text-[9px] font-black text-stone-500 uppercase tracking-[0.2em] mb-3">Motivazione della Segnalazione</p>
+                                    <p className="text-[13px] text-stone-200 leading-relaxed italic font-medium relative z-10">"{r.reason}"</p>
                                   </div>
 
                                   {/* Action Footer */}
-                                  <div className="flex gap-2">
+                                  <div className="flex flex-col sm:flex-row gap-3">
                                     <button 
                                       onClick={() => handleMarkReportRead(r.id, !r.is_read)}
                                       className={cn(
-                                        "flex-1 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border",
+                                        "flex-1 py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-3 border-2",
                                         r.is_read 
-                                          ? "bg-stone-50 text-stone-400 border-stone-100 hover:bg-stone-100" 
-                                          : "bg-rose-600 text-white border-rose-600 shadow-lg shadow-rose-900/10 active:scale-95"
+                                          ? "bg-white text-stone-400 border-stone-100 hover:bg-stone-50" 
+                                          : "bg-rose-600 text-white border-rose-600 shadow-xl shadow-rose-900/20 active:scale-95"
                                       )}
                                     >
                                       {r.is_read ? (
-                                        <><RefreshCw className="w-3.5 h-3.5" /> Riapri Caso</>
+                                        <><RefreshCw className="w-4 h-4" /> Riapri Caso</>
                                       ) : (
-                                        <><CheckCircle className="w-3.5 h-3.5" /> Concluso / Letto</>
+                                        <><CheckCircle className="w-4 h-4" /> Caso Risolto / Archivia</>
                                       )}
                                     </button>
                                     <button 
                                       onClick={() => { setSelectedUser(reportedUser); setActiveTab('utenti'); }}
-                                      className="w-12 h-12 bg-white border border-stone-200 rounded-2xl flex items-center justify-center text-stone-400 hover:text-stone-900 transition-colors"
+                                      className="py-4 px-8 bg-stone-900 text-white rounded-2xl flex items-center justify-center gap-3 hover:bg-stone-800 transition-all font-black text-[11px] uppercase tracking-widest active:scale-95"
                                     >
-                                      <Eye className="w-5 h-5" />
+                                      <Eye className="w-4 h-4" /> Vedi Profilo
                                     </button>
                                   </div>
                                 </div>
@@ -6277,20 +6287,15 @@ const AdminPage = () => {
                           })}
                         </div>
                       ) : (
-                        <div className="py-12">
-                          <ShieldCheck className="w-16 h-16 mb-6 text-stone-200 mx-auto" strokeWidth={1.5} />
-                          <h4 className="text-lg font-black text-stone-900 mb-2">Tutto Sotto Controllo</h4>
-                          <p className="text-xs text-stone-400 max-w-sm font-medium leading-relaxed px-4">In questo momento non ci sono segnalazioni attive. I report inviati dagli utenti appariranno qui in tempo reale.</p>
+                        <div className="py-24">
+                          <ShieldCheck className="w-24 h-24 mb-6 text-stone-200 mx-auto" strokeWidth={1} />
+                          <h4 className="text-xl font-black text-stone-900 mb-2">Tutto Sotto Controllo</h4>
+                          <p className="text-sm text-stone-400 max-w-sm font-medium leading-relaxed px-4">In questo momento non ci sono segnalazioni attive. I report inviati dagli utenti appariranno qui in tempo reale.</p>
                         </div>
                       )}
-                      <button onClick={() => { fetchUsers(); fetchReports(); }} className="mt-8 w-full md:w-auto px-8 py-3.5 bg-stone-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2">
-                        <RefreshCw className={cn("w-4 h-4", loadingData ? "animate-spin" : "")} />
-                        Sincronizza Segnalazioni
-                      </button>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
 
               {activeTab === 'pagamenti' && (
                 <div className="space-y-8">
@@ -6316,10 +6321,10 @@ const AdminPage = () => {
                         <div className="bg-stone-50/50 p-8 rounded-[32px] border border-stone-100/50 transition-all hover:bg-white hover:shadow-xl group">
                           <p className="text-[10px] font-black text-stone-400 uppercase tracking-[0.2em] mb-4">Utenti Premium</p>
                           <div className="flex items-baseline gap-2">
-                            <span className="text-5xl font-black text-stone-900 tracking-tighter">{users.filter((u: any) => u.is_paid).length}</span>
-                            <span className="text-emerald-500 font-black text-xs">▲ 12%</span>
+                            <span className="text-5xl font-black text-stone-900 tracking-tighter">0</span>
+                            <span className="text-emerald-500 font-black text-xs">Test Mode</span>
                           </div>
-                          <p className="text-[10px] text-stone-400 font-bold mt-4">Active VIP subscriptions</p>
+                          <p className="text-[10px] text-stone-400 font-bold mt-4">Active VIP subscriptions (Reset)</p>
                         </div>
 
                         <div className="bg-stone-900 p-8 rounded-[32px] text-white relative overflow-hidden group">
@@ -6327,9 +6332,9 @@ const AdminPage = () => {
                           <p className="text-[10px] font-black text-stone-400 uppercase tracking-[0.2em] mb-4">Proiezione MRR</p>
                           <div className="flex items-baseline gap-1">
                             <span className="text-stone-500 text-2xl font-black">€</span>
-                            <span className="text-5xl font-black tracking-tighter text-white">{(users.filter((u: any) => u.is_paid).length * 9.99).toFixed(2)}</span>
+                            <span className="text-5xl font-black tracking-tighter text-white">0.00</span>
                           </div>
-                          <p className="text-[10px] text-stone-500 font-bold mt-4 uppercase tracking-widest">Entrate Mensili Ricorrenti</p>
+                          <p className="text-[10px] text-stone-500 font-bold mt-4 uppercase tracking-widest">Entrate Mensili (Test Phase)</p>
                         </div>
 
                         <div className="bg-emerald-50 p-8 rounded-[32px] border border-emerald-100 flex flex-col justify-between">
@@ -6522,7 +6527,7 @@ const DarkTextArea = ({ label, name, value, placeholder, onChange }: any) => (
   </div>
 );
 
-const RegisterPage = () => {
+const RegisterPage = ({ setSecurityStatus }: { setSecurityStatus: any }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [step, setStep] = useState(() => {
@@ -10869,7 +10874,7 @@ export default function App() {
           if (u?.id) {
             // Use maybeSingle to avoid error on 0 rows
             const { data, error } = await supabase.from('users')
-              .select('id, is_online, is_blocked, is_suspended, doc_rejected, doc_rejected_at, last_warning_reason, suspension_reason, has_post_removal_notice')
+              .select('id, email, is_online, is_blocked, is_suspended, doc_rejected, doc_rejected_at, last_warning_reason, suspension_reason, has_post_removal_notice')
               .eq('id', u.id)
               .maybeSingle();
 
@@ -11049,7 +11054,7 @@ export default function App() {
         <Route path="/feed" element={<FeedPage />} />
         <Route path="/amici" element={<AmiciPage />} />
         <Route path="/soul-match" element={<SoulMatchPage />} />
-        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/register" element={<RegisterPage setSecurityStatus={setSecurityStatus} />} />
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/live-chat/:id" element={<LiveChatPage />} />
         <Route path="/profile" element={<ProfilePage />} />
