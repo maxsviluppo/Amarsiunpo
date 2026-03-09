@@ -6175,80 +6175,118 @@ const AdminPage = () => {
                       </div>
                     </div>
 
-                    <div className="flex flex-col items-center justify-center py-24 px-6 text-center border-2 border-dashed border-stone-100 rounded-[32px] bg-stone-50/30">
+                    <div className="flex flex-col items-center justify-center py-12 px-2 text-center border-2 border-dashed border-stone-100 rounded-[32px] bg-stone-50/30">
                       {reports && reports.length > 0 ? (
-                        <div className="w-full text-left bg-white rounded-2xl border border-stone-200 shadow-sm p-4 overflow-x-auto">
-                          <table className="w-full text-sm font-medium whitespace-nowrap">
-                            <thead>
-                              <tr className="text-stone-400 border-b border-stone-100 uppercase tracking-widest text-[10px]">
-                                <th className="py-3 px-4 text-left">Stato</th>
-                                <th className="py-3 px-4 text-left">Data</th>
-                                <th className="py-3 px-4 text-left">Segnalato</th>
-                                <th className="py-3 px-4 text-left">Segnalante</th>
-                                <th className="py-3 px-4 text-left">Motivo</th>
-                                <th className="py-3 px-4 text-center">Azioni</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {reports.map((r: any) => {
-                                const reportedUser = users.find(u => u.id === r.reported_id);
-                                const reporterUser = users.find(u => u.id === r.reporter_id);
-                                return (
-                                  <tr key={r.id} className={cn("border-b border-stone-50 hover:bg-stone-50 text-stone-700 transition-colors", r.is_read ? "opacity-50" : "bg-rose-50/10")}>
-                                    <td className="py-4 px-4 text-center">
-                                      <div className={cn("w-2 h-2 rounded-full mx-auto", r.is_read ? "bg-stone-300" : "bg-rose-600 animate-pulse")} />
-                                    </td>
-                                    <td className="py-4 px-4">{new Date(r.created_at).toLocaleDateString()}</td>
-                                    <td className="py-4 px-4">
+                        <div className="w-full space-y-4 text-left">
+                          {reports.map((r: any) => {
+                            const reportedUser = users.find(u => u.id === r.reported_id);
+                            const reporterUser = users.find(u => u.id === r.reporter_id);
+                            return (
+                              <div 
+                                key={r.id} 
+                                className={cn(
+                                  "bg-white rounded-3xl p-5 border shadow-sm transition-all relative overflow-hidden",
+                                  r.is_read ? "border-stone-100 opacity-70" : "border-rose-100 bg-rose-50/5"
+                                )}
+                              >
+                                {!r.is_read && (
+                                  <div className="absolute top-0 right-0 px-3 py-1 bg-rose-600 text-[8px] font-black text-white uppercase tracking-widest rounded-bl-xl">
+                                    Nuovo
+                                  </div>
+                                )}
+                                
+                                <div className="flex flex-col gap-5">
+                                  {/* Header: Date and Report Count */}
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">
+                                      {new Date(r.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                                    </span>
+                                    {reportedUser && (
+                                      <div className="flex items-center gap-1.5 px-2.5 py-1 bg-rose-50 text-rose-600 rounded-lg border border-rose-100">
+                                        <AlertTriangle className="w-3 h-3" />
+                                        <span className="text-[10px] font-black uppercase tracking-tight">Report: {reportedUser.reports_count || 0}</span>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Actors Grid */}
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                      <p className="text-[8px] font-black text-stone-400 uppercase tracking-tighter">Segnalato</p>
                                       {reportedUser ? (
                                         <div className="flex items-center gap-2">
-                                          <img src={reportedUser.photo_url || `https://ui-avatars.com/api/?name=${reportedUser.name}+${reportedUser.surname}`} className="w-6 h-6 rounded-full object-cover" />
-                                          <div className="flex flex-col">
-                                            <span className="font-bold text-stone-900">{reportedUser.name} {reportedUser.surname}</span>
-                                            <span className="text-[10px] text-rose-500 font-bold uppercase tracking-widest">Tot. Report: {reportedUser.reports_count || 0}</span>
+                                          <img src={reportedUser.photo_url || `https://ui-avatars.com/api/?name=${reportedUser.name}+${reportedUser.surname}`} className="w-8 h-8 rounded-xl object-cover border border-stone-100" />
+                                          <div className="min-w-0">
+                                            <p className="text-xs font-black text-stone-900 truncate">{reportedUser.name} {reportedUser.surname}</p>
                                           </div>
                                         </div>
                                       ) : (
-                                        <span className="text-stone-300 italic">{r.reported_id}</span>
+                                        <span className="text-[10px] text-stone-300 italic font-medium break-all">{r.reported_id}</span>
                                       )}
-                                    </td>
-                                    <td className="py-4 px-4">
+                                    </div>
+
+                                    <div className="space-y-2">
+                                      <p className="text-[8px] font-black text-stone-400 uppercase tracking-tighter">Da parte di</p>
                                       {reporterUser ? (
                                         <div className="flex items-center gap-2">
-                                          <span className="text-stone-900">{reporterUser.name} {reporterUser.surname}</span>
+                                          <div className="w-8 h-8 rounded-xl bg-stone-100 flex items-center justify-center shrink-0">
+                                            <User className="w-4 h-4 text-stone-400" />
+                                          </div>
+                                          <div className="min-w-0">
+                                            <p className="text-xs font-bold text-stone-600 truncate">{reporterUser.name} {reporterUser.surname}</p>
+                                          </div>
                                         </div>
                                       ) : (
-                                        <span className="text-stone-300 italic">{r.reporter_id}</span>
+                                        <span className="text-[10px] text-stone-300 italic font-medium break-all">{r.reporter_id}</span>
                                       )}
-                                    </td>
-                                    <td className="py-4 px-4 break-words whitespace-normal text-xs leading-relaxed max-w-[200px]">
-                                      {r.reason}
-                                    </td>
-                                    <td className="py-4 px-4 text-center">
-                                      <button 
-                                        onClick={() => handleMarkReportRead(r.id, !r.is_read)}
-                                        className={cn(
-                                          "px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
-                                          r.is_read ? "bg-stone-100 text-stone-500 hover:bg-stone-200" : "bg-rose-600 text-white hover:bg-rose-700 shadow-md shadow-rose-900/10"
-                                        )}
-                                      >
-                                        {r.is_read ? "Riapri" : "Segna come letto"}
-                                      </button>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
+                                    </div>
+                                  </div>
+
+                                  {/* Reason */}
+                                  <div className="bg-stone-50 rounded-2xl p-4 border border-stone-100">
+                                    <p className="text-[11px] text-stone-700 leading-relaxed italic font-medium">"{r.reason}"</p>
+                                  </div>
+
+                                  {/* Action Footer */}
+                                  <div className="flex gap-2">
+                                    <button 
+                                      onClick={() => handleMarkReportRead(r.id, !r.is_read)}
+                                      className={cn(
+                                        "flex-1 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border",
+                                        r.is_read 
+                                          ? "bg-stone-50 text-stone-400 border-stone-100 hover:bg-stone-100" 
+                                          : "bg-rose-600 text-white border-rose-600 shadow-lg shadow-rose-900/10 active:scale-95"
+                                      )}
+                                    >
+                                      {r.is_read ? (
+                                        <><RefreshCw className="w-3.5 h-3.5" /> Riapri Caso</>
+                                      ) : (
+                                        <><CheckCircle className="w-3.5 h-3.5" /> Concluso / Letto</>
+                                      )}
+                                    </button>
+                                    <button 
+                                      onClick={() => { setSelectedUser(reportedUser); setActiveTab('utenti'); }}
+                                      className="w-12 h-12 bg-white border border-stone-200 rounded-2xl flex items-center justify-center text-stone-400 hover:text-stone-900 transition-colors"
+                                    >
+                                      <Eye className="w-5 h-5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       ) : (
-                        <>
-                          <ShieldCheck className="w-16 h-16 mb-6 text-stone-200" />
+                        <div className="py-12">
+                          <ShieldCheck className="w-16 h-16 mb-6 text-stone-200 mx-auto" strokeWidth={1.5} />
                           <h4 className="text-lg font-black text-stone-900 mb-2">Tutto Sotto Controllo</h4>
-                          <p className="text-sm text-stone-400 max-w-sm font-medium leading-relaxed">In questo momento non ci sono segnalazioni attive. I report inviati dagli utenti appariranno qui in tempo reale.</p>
-                        </>
+                          <p className="text-xs text-stone-400 max-w-sm font-medium leading-relaxed px-4">In questo momento non ci sono segnalazioni attive. I report inviati dagli utenti appariranno qui in tempo reale.</p>
+                        </div>
                       )}
-                      <button onClick={() => { fetchUsers(); fetchReports(); }} className="mt-8 px-8 py-3 bg-stone-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg active:scale-95">Sincronizza Ora</button>
+                      <button onClick={() => { fetchUsers(); fetchReports(); }} className="mt-8 w-full md:w-auto px-8 py-3.5 bg-stone-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2">
+                        <RefreshCw className={cn("w-4 h-4", loadingData ? "animate-spin" : "")} />
+                        Sincronizza Segnalazioni
+                      </button>
                     </div>
                   </div>
                 </div>
