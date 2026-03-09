@@ -474,6 +474,7 @@ const GlobalFlashBanner = () => {
 
   const handlePublishFlash = async () => {
     if (!flashMessage.trim() || !currentUser) return;
+
     setIsPublishingFlash(true);
     const newFlash = {
       message: flashMessage,
@@ -680,6 +681,19 @@ const GlobalFlashBanner = () => {
                 if (isFree) {
                   setShowPremiumModal(true); 
                 } else { 
+                  const lastFlash = bannerMessages.find(m => m.user_id === currentUser?.id);
+                  if (lastFlash) {
+                    const diffTime = Date.now() - new Date(lastFlash.created_at).getTime();
+                    const diffHours = (24 * 60 * 60 * 1000 - diffTime) / (1000 * 60 * 60);
+                    if (diffHours > 0) {
+                      const remainingHours = Math.floor(diffHours);
+                      const remainingMins = Math.ceil((diffHours - remainingHours) * 60);
+                      // Use a clean native alert rather than breaking the UI, but it would be better with a Toast. 
+                      // Wait! The user asked "fai apparire un avviso" which can be an alert or toast. Alert is okay here for simplicity!
+                      alert(`🚫 Attenzione! Devi attendere ancora ${remainingHours}h e ${remainingMins}m prima di poter pubblicare un nuovo Flash.`);
+                      return;
+                    }
+                  }
                   setIsPublishingModalOpen(true); 
                 } 
               }}
@@ -4984,6 +4998,7 @@ const AdminPage = () => {
   const [docSubTab, setDocSubTab] = useState<'pending' | 'archive'>('pending');
   const [previewDoc, setPreviewDoc] = useState<{ url: string; name: string } | null>(null);
   const [modals, setModals] = useState<{ warning: boolean; suspension: boolean; ban: boolean }>({ warning: false, suspension: false, ban: false });
+  const [confirmPhotoModal, setConfirmPhotoModal] = useState<{ type: 'gallery' | 'post', userId: string, photoUrl?: string, postId?: string } | null>(null);
   const [modReason, setModReason] = useState('');
   const [userPosts, setUserPosts] = useState<any[]>([]);
   const [loadingPosts, setLoadingPosts] = useState(false);
@@ -5236,42 +5251,53 @@ const AdminPage = () => {
     setLoadingPosts(false);
   };
 
-  const handleDeletePost = async (postId: string, userId: string) => {
-    try {
-      const { error } = await supabase.from('posts').delete().eq('id', postId);
-      if (!error) {
-        // Notify the user by setting the flag
-        await supabase.from('users').update({ has_post_removal_notice: true }).eq('id', userId);
-        
-        setToast({ message: "Post rimosso e utente notificato.", type: 'success' });
-        setUserPosts(prev => prev.filter(p => p.id !== postId));
-      }
-    } catch (e) {
-      setToast({ message: "Impossibile completare l'azione.", type: 'error' });
-    }
+  const handleDeletePost = (postId: string, userId: string) => {
+    setConfirmPhotoModal({ type: 'post', userId, postId });
   };
 
-  const handleDeleteGalleryPhoto = async (userId: string, photoUrl: string) => {
-    if (!window.confirm("Eliminare questa foto dalla galleria?")) return;
-    try {
-      const target = users.find(u => u.id === userId);
-      if (!target) return;
-      const currentPhotos = Array.isArray(target.photos) ? target.photos : [];
-      const updatedPhotos = currentPhotos.filter((p: string) => p !== photoUrl);
-      
-      const { error } = await supabase.from('users').update({ photos: updatedPhotos }).eq('id', userId);
-      if (!error) {
-        setToast({ message: "Foto rimossa correttamente.", type: 'success' });
-        setUsers(prev => prev.map(u => u.id === userId ? { ...u, photos: updatedPhotos } : u));
-        if (selectedUser?.id === userId) {
-          setSelectedUser({ ...selectedUser, photos: updatedPhotos });
+  const handleDeleteGalleryPhoto = (userId: string, photoUrl: string) => {
+    setConfirmPhotoModal({ type: 'gallery', userId, photoUrl });
+  };
+
+  const confirmDeleteAction = async () => {
+    if (!confirmPhotoModal) return;
+    
+    if (confirmPhotoModal.type === 'post' && confirmPhotoModal.postId) {
+      try {
+        const { error } = await supabase.from('posts').delete().eq('id', confirmPhotoModal.postId);
+        if (!error) {
+          await supabase.from('users').update({ has_post_removal_notice: true }).eq('id', confirmPhotoModal.userId);
+          setToast({ message: "Post rimosso e utente notificato.", type: 'success' });
+          setUserPosts(prev => prev.filter(p => p.id !== confirmPhotoModal.postId));
+        } else {
+          setToast({ message: "Errore durante l'eliminazione del post.", type: 'error' });
         }
-      } else {
-        setToast({ message: "Errore durante l'aggiornamento.", type: 'error' });
+      } catch (e) {
+        setToast({ message: "Impossibile completare l'azione.", type: 'error' });
       }
-    } catch (e) {
-      setToast({ message: "Impossibile completare l'azione.", type: 'error' });
+    } else if (confirmPhotoModal.type === 'gallery' && confirmPhotoModal.photoUrl) {
+      try {
+        const target = users.find(u => u.id === confirmPhotoModal.userId);
+        if (target) {
+          const currentPhotos = Array.isArray(target.photos) ? target.photos : [];
+          const updatedPhotos = currentPhotos.filter((p: string) => p !== confirmPhotoModal.photoUrl);
+          
+          const { error } = await supabase.from('users').update({ photos: updatedPhotos }).eq('id', confirmPhotoModal.userId);
+          if (!error) {
+            setToast({ message: "Foto rimossa correttamente.", type: 'success' });
+            setUsers(prev => prev.map(u => u.id === confirmPhotoModal.userId ? { ...u, photos: updatedPhotos } : u));
+            if (selectedUser?.id === confirmPhotoModal.userId) {
+              setSelectedUser({ ...selectedUser, photos: updatedPhotos });
+            }
+          } else {
+            setToast({ message: "Errore durante l'aggiornamento.", type: 'error' });
+          }
+        }
+      } catch (e) {
+        setToast({ message: "Impossibile completare l'azione.", type: 'error' });
+      }
     }
+    setConfirmPhotoModal(null);
   };
 
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
@@ -5840,7 +5866,7 @@ const AdminPage = () => {
                           {/* Action Reason Modals */}
                           <AnimatePresence>
                             {(modals.warning || modals.suspension) && (
-                              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-50 bg-stone-900/40 backdrop-blur-xl flex items-center justify-center p-6">
+                              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-[60] bg-stone-900/40 backdrop-blur-xl flex items-center justify-center p-6">
                                 <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="bg-white w-full max-w-sm rounded-[32px] p-8 shadow-2xl space-y-6">
                                   <div className="text-center">
                                     <h4 className="text-xl font-black text-stone-900">Motivazione {modals.warning ? 'Ammonizione' : 'Sospensione'}</h4>
@@ -5857,6 +5883,27 @@ const AdminPage = () => {
                                       <button onClick={() => { setModals({ warning: false, suspension: false, ban: false }); setModReason(''); }} className="flex-1 py-3 bg-stone-100 text-stone-600 rounded-xl text-[10px] font-black uppercase tracking-widest">Annulla</button>
                                       <button onClick={() => modals.warning ? handleWarnUser(selectedUser.id) : handleSuspendUser(selectedUser.id)} className="flex-1 py-3 bg-stone-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-xl">Conferma</button>
                                     </div>
+                                  </div>
+                                </motion.div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+
+                          {/* Photo Delete Confirm Modal */}
+                          <AnimatePresence>
+                            {confirmPhotoModal && (
+                              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-[60] bg-stone-900/40 backdrop-blur-xl flex items-center justify-center p-6">
+                                <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="bg-white w-full max-w-sm rounded-[32px] p-8 shadow-2xl space-y-6 text-center border-t-[6px] border-rose-500">
+                                  <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto text-rose-500 mb-4">
+                                    <Trash2 className="w-8 h-8" />
+                                  </div>
+                                  <div>
+                                    <h4 className="text-lg font-black text-stone-900 leading-tight">Eliminare {confirmPhotoModal.type === 'post' ? 'il Post' : 'la Foto'}?</h4>
+                                    <p className="text-xs text-stone-500 mt-2 font-medium">L'azione sarà definitiva e la foto non potrà essere recuperata.</p>
+                                  </div>
+                                  <div className="flex gap-3 mt-8">
+                                    <button onClick={() => setConfirmPhotoModal(null)} className="flex-1 py-3.5 bg-stone-100 text-stone-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-stone-200 transition-all">Annulla</button>
+                                    <button onClick={confirmDeleteAction} className="flex-1 py-3.5 bg-rose-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-rose-900/20 active:scale-95 transition-all">Elimina</button>
                                   </div>
                                 </motion.div>
                               </motion.div>
