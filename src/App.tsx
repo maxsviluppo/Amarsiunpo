@@ -16,6 +16,8 @@ import {
   Briefcase,
   Sparkles,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Info,
   Home,
   PlayCircle,
@@ -250,6 +252,11 @@ const AppBottomNav = () => {
         }
       })
       .subscribe();
+
+    const handleReadUpdate = () => {
+      fetchPending();
+    };
+    window.addEventListener('chat-read-update', handleReadUpdate);
 
     const interval = setInterval(fetchPending, 10000);
     return () => {
@@ -743,7 +750,19 @@ const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 
 };
 
 export const PremiumModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) => {
+  const [showComparison, setShowComparison] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'annual'>('annual');
+  
   if (!isOpen) return null;
+
+  const features = [
+    { name: "SoulLink giornalieri", free: "3", premium: "Illimitati" },
+    { name: "Messaggi Flash", free: "No", premium: "Sì" },
+    { name: "Vedi chi ti ha cercato", free: "Sfocato", premium: "Chiaro" },
+    { name: "Badge Speciale", free: "Base", premium: "Premium" },
+    { name: "Priorità in Bacheca", free: "No", premium: "Alta" },
+  ];
+
   return (
     <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={onClose} />
@@ -754,58 +773,131 @@ export const PremiumModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: ()
         className="w-full max-w-sm rounded-[32px] overflow-hidden relative"
         style={{
           background: 'linear-gradient(135deg, rgba(20,20,25,0.95), rgba(10,10,15,0.95))',
-          border: '1px solid rgba(244,63,94,0.3)',
+          border: '1px solid rgba(147,51,234,0.4)',
           boxShadow: '0 20px 60px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.1)'
         }}
       >
-        <div className="absolute top-0 right-0 w-32 h-32 bg-rose-600/20 blur-[50px] -mr-10 -mt-10" />
-        <div className="absolute bottom-0 left-0 w-32 h-32 bg-purple-600/20 blur-[50px] -ml-10 -mb-10" />
+        <div className="absolute top-0 right-0 w-32 h-32 bg-purple-600/20 blur-[40px] -mr-10 -mt-10" />
         
-        <div className="p-6 relative z-10 space-y-6">
+        <div className="p-6 relative z-10 space-y-6 overflow-y-auto max-h-[85vh]">
           <div className="flex justify-between items-start">
-            <div className="w-12 h-12 bg-rose-600/20 rounded-2xl flex items-center justify-center border border-rose-500/30">
-              <Sparkles className="w-6 h-6 text-rose-400" />
+            <div className="w-12 h-12 bg-purple-600/20 rounded-2xl flex items-center justify-center border border-purple-500/30">
+              <Heart className="w-6 h-6 text-purple-400 fill-current" />
             </div>
             <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 text-white/50 hover:text-white hover:bg-white/10 transition-colors">
               <X className="w-4 h-4" />
             </button>
           </div>
 
-          <div>
-            <h2 className="text-2xl font-serif font-black text-white mb-2">SoulMatch <span className="text-rose-500">Premium</span></h2>
-            <p className="text-sm text-stone-400 font-medium">Sblocca il vero potenziale dell'amore e scopri chi ti sta cercando in questo momento.</p>
-          </div>
+          {!showComparison ? (
+            <>
+              <div>
+                <h2 className="text-2xl font-serif font-black text-white mb-2">Diventa <span className="text-purple-500">Premium</span></h2>
+                <p className="text-sm text-stone-400 font-medium">Porta la tua ricerca a un livello superiore con vantaggi esclusivi.</p>
+              </div>
 
-          <ul className="space-y-3">
-            {[
-              "Scopri chi ti ha messo Mi Piace",
-              "Messaggi Flash in Bacheca illimitati",
-              "Filtri di ricerca avanzati (età, città)",
-              "Nessun limite giornaliero ai SoulLink",
-              "Ricevute di lettura in Chat"
-            ].map((feature, i) => (
-              <li key={i} className="flex items-center gap-3">
-                <div className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0">
-                  <CheckCircle className="w-3 h-3 text-emerald-400" />
+              <div className="space-y-4">
+                <div className="pt-2 flex flex-col gap-3">
+                  <button 
+                    onClick={() => setSelectedPlan('monthly')}
+                    className={cn(
+                      "w-full transition-all border rounded-2xl py-4 px-4 flex items-center justify-between group active:scale-95",
+                      selectedPlan === 'monthly' ? "bg-white/10 border-white/40" : "bg-white/5 border-white/10"
+                    )}
+                  >
+                    <div className="text-left flex-1 min-w-0">
+                      <span className={cn(
+                        "text-[10px] uppercase font-black tracking-widest transition-colors",
+                        selectedPlan === 'monthly' ? "text-white" : "text-stone-400 group-hover:text-stone-300"
+                      )}>Abbonamento Mensile</span>
+                      <p className="text-lg font-black text-white mt-0.5">€ 3,99 / mese</p>
+                    </div>
+                    {selectedPlan === 'monthly' && <CheckCircle className="w-5 h-5 text-purple-400" />}
+                  </button>
+                  <button 
+                    onClick={() => setSelectedPlan('annual')}
+                    className={cn(
+                      "w-full transition-all border rounded-2xl py-4 px-4 flex items-center justify-between group active:scale-95 relative overflow-hidden",
+                      selectedPlan === 'annual' ? "bg-purple-600/20 border-purple-500/50 shadow-[0_0_20px_rgba(168,85,247,0.2)]" : "bg-white/5 border-white/10"
+                    )}
+                  >
+                    <div className="absolute top-2 right-4 bg-purple-600 border border-purple-400 text-[6px] text-white font-black uppercase px-2 py-0.5 rounded-full tracking-widest">Miglior Prezzo</div>
+                    <div className="text-left flex-1 min-w-0">
+                      <span className={cn(
+                        "text-[10px] uppercase font-black tracking-widest transition-colors",
+                        selectedPlan === 'annual' ? "text-purple-300" : "text-stone-400 group-hover:text-stone-300"
+                      )}>Abbonamento Annuale</span>
+                      <p className="text-lg font-black text-white mt-0.5">€ 19,99 / anno</p>
+                    </div>
+                    {selectedPlan === 'annual' && <CheckCircle className="w-5 h-5 text-purple-400" />}
+                  </button>
                 </div>
-                <span className="text-xs font-bold text-white/90">{feature}</span>
-              </li>
-            ))}
-          </ul>
 
-          <div className="pt-2 flex gap-3">
-            <button className="flex-1 bg-white/5 hover:bg-white/10 transition-all border border-white/10 rounded-2xl py-3 px-2 flex flex-col items-center justify-center group active:scale-95">
-              <span className="text-[10px] uppercase font-black tracking-widest text-stone-400 group-hover:text-stone-300">Mensile</span>
-              <span className="text-lg font-black text-white mt-1">€ 3.99</span>
-            </button>
-            <button className="flex-1 bg-rose-600 hover:bg-rose-500 transition-all border border-rose-500 shadow-[0_0_20px_rgba(244,63,94,0.4)] rounded-2xl py-3 px-2 flex flex-col items-center justify-center group active:scale-95 relative overflow-hidden">
-              <div className="absolute -top-[10px] -right-[10px] bg-rose-900 border border-rose-500 text-[7px] text-white font-black uppercase px-2 py-1 rotate-12 rounded-full tracking-widest">Offerta</div>
-              <span className="text-[10px] uppercase font-black tracking-widest text-rose-200 group-hover:text-white transition-colors">Annuale</span>
-              <span className="text-lg font-black text-white mt-1">€ 19.99</span>
-            </button>
-          </div>
+                <button 
+                  onClick={() => setShowComparison(true)}
+                  className="w-full py-4 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black text-white uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-white/10 transition-all"
+                >
+                  <Info className="w-4 h-4" /> Vedi Tabella Differenze
+                </button>
 
-          <p className="text-[9px] text-center text-stone-500 font-bold uppercase tracking-widest pt-2">Pagamento Sicuro • Nessun vincolo</p>
+                <button 
+                  disabled
+                  className="w-full py-4 bg-purple-600 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-lg shadow-purple-900/40 opacity-50 cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  <CreditCard className="w-4 h-4" /> Procedi all'abbonamento
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
+              <div className="text-center">
+                <h3 className="text-sm font-black text-white uppercase tracking-widest mb-1">Confronto Piani</h3>
+                <p className="text-[10px] text-stone-500 font-bold uppercase tracking-tight">Perché passare a Premium</p>
+              </div>
+
+              <div className="rounded-2xl overflow-hidden border border-white/5 bg-white/5">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="bg-white/5">
+                      <th className="p-3 text-[9px] font-black text-white/30 uppercase tracking-widest">Servizio</th>
+                      <th className="p-3 text-[9px] font-black text-white/30 uppercase tracking-widest text-center">Base</th>
+                      <th className="p-3 text-[9px] font-black text-purple-400 uppercase tracking-widest text-center">Pro</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {features.map((f, i) => (
+                      <tr key={i}>
+                        <td className="p-3 text-[10px] font-bold text-white/70">{f.name}</td>
+                        <td className="p-3 text-[10px] font-black text-center">
+                          {f.free === 'No' ? <XCircle className="w-4 h-4 text-rose-500 mx-auto" /> : <span className="text-white/30">{f.free}</span>}
+                        </td>
+                        <td className="p-3 text-[10px] font-black text-center">
+                          {f.premium === 'Sì' ? <CheckCircle className="w-4 h-4 text-emerald-500 mx-auto" /> : <span className="text-purple-400 font-black">{f.premium}</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex flex-col gap-3 pt-2">
+                <button 
+                  disabled
+                  className="w-full py-4 bg-purple-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-purple-900/40 opacity-50 flex items-center justify-center gap-2"
+                >
+                  Sottoscrivi ora
+                </button>
+                <button 
+                  onClick={() => setShowComparison(false)}
+                  className="w-full py-3 text-[10px] font-black text-white/30 uppercase tracking-widest hover:text-white transition-colors"
+                >
+                  Torna alle Tariffe
+                </button>
+              </div>
+            </div>
+          )}
+
+          <p className="text-[9px] text-center text-stone-500 font-bold uppercase tracking-widest pt-2">Pagamento Sicuro via Stripe • Disdici quando vuoi</p>
         </div>
       </motion.div>
     </div>
@@ -1074,7 +1166,7 @@ const ProfileCard: React.FC<{ profile: UserProfile; onInteract?: () => void }> =
 
           {profile.is_paid && (
             <div className="absolute top-3 left-3 bg-amber-400 text-stone-900 px-2 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wider flex items-center gap-1 shadow-lg">
-              <Sparkles className="w-2.5 h-2.5" /> Premium
+              <Heart className="w-2.5 h-2.5 fill-current" /> Premium
             </div>
           )}
         </div>
@@ -2996,6 +3088,9 @@ const BachecaPage = () => {
         ))}
       </div>
 
+      {/* ── DOCUMENT REJECTED BANNER (Bacheca) ── */}
+      <SharedRejectedDocumentBanner currentUser={currentUser} />
+
       {/* ── HERO PHOTO SLIDER ── */}
       {!loading && heroProfile && (
 
@@ -4184,6 +4279,11 @@ const FeedPage = () => {
         ))}
       </div>
 
+      {/* ── DOCUMENT REJECTED BANNER (Feed) ── */}
+      <div className="relative z-20 mb-[30px] -mt-10">
+        <SharedRejectedDocumentBanner currentUser={currentUser} />
+      </div>
+
       {/* Document rejection handled by side banner */}
 
       {/* HERO SECTION - slide limited to 3 compatible profiles */}
@@ -4433,32 +4533,43 @@ const AmiciPage = () => {
       navigate('/register');
     }
 
-    // Realtime subscription for SoulLinks
+    // Realtime subscription for SoulLinks and clearing read status on new message
     if (currentUser?.id) {
-      const channel = supabase
+      const slChannel = supabase
         .channel('soul-links-realtime')
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'soul_links',
-            filter: `receiver_id=eq.${currentUser.id}`
-          },
-          () => fetchSoulLinks(currentUser.id)
-        )
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'soul_links',
-            filter: `sender_id=eq.${currentUser.id}`
-          },
-          () => fetchSoulLinks(currentUser.id)
-        )
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'soul_links', filter: `receiver_id=eq.${currentUser.id}` }, () => fetchSoulLinks(currentUser.id))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'soul_links', filter: `sender_id=eq.${currentUser.id}` }, () => fetchSoulLinks(currentUser.id))
         .subscribe();
-      return () => { supabase.removeChannel(channel); };
+
+      const msgChannel = supabase
+        .channel('amici-page-msgs')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'room_messages', filter: `receiver_id=eq.${currentUser.id}` }, (payload) => {
+          const msg = payload.new;
+          setReadChatIds(prev => {
+            const next = new Set(prev);
+            if (next.has(msg.sender_id)) {
+              next.delete(msg.sender_id);
+              localStorage.setItem('sm_read_chats', JSON.stringify([...next]));
+            }
+            return next;
+          });
+          fetchAllLastMessages();
+        })
+        .subscribe();
+
+      const handleReadUpdate = () => {
+        try {
+          const s = localStorage.getItem('sm_read_chats');
+          if (s) setReadChatIds(new Set(JSON.parse(s)));
+        } catch (e) { }
+      };
+      window.addEventListener('chat-read-update', handleReadUpdate);
+
+      return () => {
+        supabase.removeChannel(slChannel);
+        supabase.removeChannel(msgChannel);
+        window.removeEventListener('chat-read-update', handleReadUpdate);
+      };
     }
   }, [currentUser?.id, navigate]);
 
@@ -4740,30 +4851,17 @@ const AmiciPage = () => {
                           border: notify ? '1px solid rgba(244,63,94,0.0)' : '1px solid rgba(255,255,255,0.07)'
                         }}
                       >
-                        {/* Balloon hearts — large, glowing, slow bob */}
-                        {notify && [
-                          { left: 12, size: 18, color: '#f43f5e', dur: 4.2, delay: 0, bot: 8 },
-                          { left: 30, size: 14, color: '#fb7185', dur: 3.8, delay: 0.7, bot: 14 },
-                          { left: 50, size: 22, color: '#f43f5e', dur: 4.8, delay: 0.3, bot: 6 },
-                          { left: 69, size: 16, color: '#fda4af', dur: 3.6, delay: 1.1, bot: 12 },
-                          { left: 85, size: 14, color: '#f43f5e', dur: 4.4, delay: 0.55, bot: 10 },
-                        ].map((h, k) => (
-                          <div
-                            key={k}
-                            className="bha"
-                            style={{
-                              left: `${h.left}%`,
-                              bottom: h.bot,
-                              '--bdur': `${h.dur}s`,
-                              '--bdelay': `${h.delay}s`,
-                              filter: `drop-shadow(0 0 6px ${h.color}) drop-shadow(0 0 12px ${h.color}80)`,
-                            } as React.CSSProperties}
-                          >
-                            <svg width={h.size} height={h.size} viewBox="0 0 24 24" fill={h.color}>
-                              <path d="M12 21.593c-5.63-5.539-11-10.297-11-14.402 0-3.791 3.068-5.191 5.281-5.191 1.312 0 4.151.501 5.719 4.457 1.59-3.968 4.464-4.447 5.726-4.447 2.54 0 5.274 1.621 5.274 5.181 0 4.069-5.136 8.625-11 14.402z" />
-                            </svg>
+                        {/* Notification badge instead of confusing hearts */}
+                        {notify && (
+                          <div className="absolute top-2 right-2 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-500/20 border border-rose-500/30 backdrop-blur-md z-20">
+                            <motion.div
+                              animate={{ scale: [1, 1.3, 1] }}
+                              transition={{ repeat: Infinity, duration: 1.2 }}
+                              className="w-1.5 h-1.5 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.8)]"
+                            />
+                            <span className="text-[9px] font-black text-rose-300 uppercase tracking-tighter">Novità</span>
                           </div>
-                        ))}
+                        )}
 
                         <div className="relative shrink-0 rounded-full" style={notify ? { border: '2.5px solid #f43f5e', boxShadow: '0 0 14px rgba(244,63,94,0.7), 0 0 4px rgba(244,63,94,0.4)' } : { border: '2px solid transparent' }}>
                           <ProfileAvatar
@@ -4809,17 +4907,6 @@ const AmiciPage = () => {
                         </div>
 
                         <div className="flex items-center gap-2 shrink-0">
-                          {/* LiveChat */}
-                          <button
-                            onClick={() => {
-                              navigate(`/live-chat/${f.other_user?.id}`);
-                            }}
-                            className="w-9 h-9 text-white rounded-2xl flex items-center justify-center active:scale-90 transition-all"
-                            style={{ background: 'rgba(52,211,153,0.2)', border: '1px solid rgba(52,211,153,0.4)', boxShadow: '0 0 12px rgba(52,211,153,0.3)' }}
-                            title="Chat Live"
-                          >
-                            <MessageCircle className="w-4 h-4 text-emerald-400" />
-                          </button>
                           {/* Messaggio privato */}
                           {(() => {
                             return (
@@ -8559,13 +8646,31 @@ const ChatPage = () => {
   useEffect(() => {
     if (!user) return;
     const roomChannel = supabase.channel('chat_page_room')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'room_messages', filter: `receiver_id=eq.${user.id}` }, () => {
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'room_messages', filter: `receiver_id=eq.${user.id}` }, (payload) => {
+        const msg = payload.new;
+        setReadChatIds(prev => {
+          const next = new Set(prev);
+          if (next.has(msg.sender_id)) {
+            next.delete(msg.sender_id);
+            localStorage.setItem('sm_read_chats', JSON.stringify([...next]));
+          }
+          return next;
+        });
         fetchData(user.id);
       })
       .subscribe();
 
     const requestChannel = supabase.channel('chat_page_req')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_requests', filter: `to_user_id=eq.${user.id}` }, () => {
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_requests', filter: `to_user_id=eq.${user.id}` }, (payload) => {
+        const req = payload.new;
+        setReadChatIds(prev => {
+          const next = new Set(prev);
+          if (next.has(req.from_user_id)) {
+            next.delete(req.from_user_id);
+            localStorage.setItem('sm_read_chats', JSON.stringify([...next]));
+          }
+          return next;
+        });
         fetchData(user.id);
       })
       .subscribe();
@@ -8578,129 +8683,86 @@ const ChatPage = () => {
 
   const fetchData = async (userId: string) => {
     try {
-      // 1. Fetch SoulLinks (Friends)
-      const { data: sentSL } = await supabase
-        .from('soul_links')
-        .select('*, receiver:users!receiver_id(*)')
-        .eq('sender_id', userId)
-        .eq('status', 'accepted');
+      // Parallelize queries for maximum speed
+      const [sentRes, recvRes, reqRes, msgsRes, flashRes] = await Promise.all([
+        supabase.from('soul_links').select('*, receiver:users!receiver_id(id, name, surname, photo_url, photos, is_online)').eq('sender_id', userId).eq('status', 'accepted'),
+        supabase.from('soul_links').select('*, sender:users!sender_id(id, name, surname, photo_url, photos, is_online)').eq('receiver_id', userId).eq('status', 'accepted'),
+        supabase.from('chat_requests').select('*, from_user:users!from_user_id(id, name, surname, photo_url, photos)').eq('to_user_id', userId).order('created_at', { ascending: false }),
+        supabase.from('room_messages').select('id, text, created_at, sender_id, receiver_id').or(`sender_id.eq.${userId},receiver_id.eq.${userId}`).order('created_at', { ascending: false }).limit(200),
+        supabase.from('banner_messages').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(1)
+      ]);
 
-      const { data: recvSL } = await supabase
-        .from('soul_links')
-        .select('*, sender:users!sender_id(*)')
-        .eq('receiver_id', userId)
-        .eq('status', 'accepted');
+      const sentSL = sentRes.data || [];
+      const recvSL = recvRes.data || [];
+      const requestsData = reqRes.data || [];
+      const msgs = msgsRes.data || [];
+      const flashData = flashRes.data?.[0];
 
-      const acceptedFriends: SoulLink[] = [];
-      (sentSL || []).forEach((sl: any) => acceptedFriends.push({ ...sl, other_user: sl.receiver }));
-      (recvSL || []).forEach((sl: any) => acceptedFriends.push({ ...sl, other_user: sl.sender }));
+      const acceptedFriends: any[] = [
+        ...sentSL.map((sl: any) => ({ ...sl, other_user: Array.isArray(sl.receiver) ? sl.receiver[0] : sl.receiver })),
+        ...recvSL.map((sl: any) => ({ ...sl, other_user: Array.isArray(sl.sender) ? sl.sender[0] : sl.sender }))
+      ];
       setFriends(acceptedFriends);
 
-      // 2. Fetch richieste asincrone (chat_requests) - Only from friends
-      const { data: requestsData } = await supabase
-        .from('chat_requests')
-        .select(`
-                              *,
-                              from_user:users!from_user_id(id, name, surname, photo_url, photos)
-                              `)
-        .eq('to_user_id', userId)
-        .order('created_at', { ascending: false });
-
-      if (requestsData) {
-        // Filter those where from_user is an accepted friend
-        const filteredRequests = requestsData.filter((r: any) =>
-          acceptedFriends.some(f => f.other_user?.id === r.from_user_id)
-        );
-
-        const processedRequests = filteredRequests.map((r: any) => ({
-          ...r,
-          name: r.from_user?.name,
-          surname: r.from_user?.surname,
-          photo_url: r.from_user?.photos?.[0] || r.from_user?.photo_url
-        }));
-        setChatRequests(processedRequests);
-      }
-
-      // 3. Fetch chat in corso (room_messages)
-      const { data: msgs, error: msgsError } = await supabase
-        .from('room_messages')
-        .select(`
-          id, text, created_at, sender_id, receiver_id,
-          sender:users!sender_id(*),
-          receiver:users!receiver_id(*)
-        `)
-        .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
-        .order('created_at', { ascending: false });
-
-      // 3. Process Data into Chat Map
-      const chatMap = new Map();
-
-      // Normalize acceptedFriends to ensure other_user is a single object
-      const normalizedFriends = acceptedFriends.map(f => {
-        const u: any = f.other_user;
+      // Process requests
+      const filteredRequests = requestsData.filter((r: any) =>
+        acceptedFriends.some(f => f.other_user?.id === r.from_user_id)
+      ).map((r: any) => {
+        const u = Array.isArray(r.from_user) ? r.from_user[0] : r.from_user;
         return {
-          ...f,
-          other_user: Array.isArray(u) ? u[0] : u
+          ...r,
+          name: u?.name,
+          surname: u?.surname,
+          photo_url: u?.photos?.[0] || u?.photo_url
         };
       });
+      setChatRequests(filteredRequests);
 
-      // Start with room_messages if available
+      // Process Room Messages into Map
+      const chatMap = new Map();
+      const friendMap = new Map(acceptedFriends.map(f => [f.other_user?.id, f.other_user]));
+
       if (msgs) {
         for (const m of msgs) {
-          const isSender = m.sender_id === userId;
-          const u: any = isSender ? m.receiver : m.sender;
-          const otherUser = Array.isArray(u) ? u[0] : u;
-          if (!otherUser?.id) continue;
+          const otherId = m.sender_id === userId ? m.receiver_id : m.sender_id;
+          const otherUser = friendMap.get(otherId);
+          if (!otherUser) continue;
 
-          // Check if user is among accepted friends
-          const isFriend = normalizedFriends.some(f => f.other_user?.id === otherUser.id);
-          if (!isFriend) continue; // Only show chats with friends
-
-          if (!chatMap.has(otherUser.id)) {
-            chatMap.set(otherUser.id, {
-              other_user: otherUser,
+          if (!chatMap.has(otherId)) {
+            chatMap.set(otherId, {
+              other_user: { ...otherUser, photo_url: otherUser.photos?.[0] || otherUser.photo_url },
               last_msg: m.text,
               created_at: m.created_at,
-              isSender,
-              messages: [{ ...m, isSender }]
+              isSender: m.sender_id === userId,
+              messages: [{ ...m, isSender: m.sender_id === userId }]
             });
           } else {
-            chatMap.get(otherUser.id).messages.unshift({ ...m, isSender });
+            chatMap.get(otherId).messages.unshift({ ...m, isSender: m.sender_id === userId });
           }
         }
       }
 
-      // Merge chat requests
-      if (requestsData) {
-        for (const r of requestsData) {
-          const u: any = r.from_user;
-          const from_u = Array.isArray(u) ? u[0] : u;
-          if (!from_u?.id) continue;
-
-          const isFriend = normalizedFriends.some(f => f.other_user?.id === from_u.id);
-          if (!isFriend) continue;
-
-          if (!chatMap.has(from_u.id) || new Date(r.created_at) > new Date(chatMap.get(from_u.id).created_at)) {
-            chatMap.set(from_u.id, {
-              other_user: { ...from_u, photo_url: from_u.photos?.[0] || from_u.photo_url },
-              last_msg: r.message,
-              created_at: r.created_at,
-              isSender: false,
-              messages: []
-            });
-          }
+      // Merge chat requests into map if newer
+      filteredRequests.forEach(r => {
+        const otherId = r.from_user_id;
+        if (!chatMap.has(otherId) || new Date(r.created_at) > new Date(chatMap.get(otherId).created_at)) {
+          const u = friendMap.get(otherId);
+          chatMap.set(otherId, {
+            other_user: { ...u, photo_url: u?.photos?.[0] || u?.photo_url },
+            last_msg: r.message,
+            created_at: r.created_at,
+            isSender: false,
+            messages: []
+          });
         }
-      }
+      });
 
-      // Finally, ensure all friends are included
-      normalizedFriends.forEach(f => {
-        const friendUser = f.other_user;
-        if (friendUser?.id && !chatMap.has(friendUser.id)) {
-          chatMap.set(friendUser.id, {
-            other_user: {
-              ...friendUser,
-              photo_url: friendUser.photos?.[0] || friendUser.photo_url || `https://picsum.photos/seed/${friendUser.id}/100`
-            },
+      // Ensure all friends are included
+      acceptedFriends.forEach(f => {
+        const u = f.other_user;
+        if (u?.id && !chatMap.has(u.id)) {
+          chatMap.set(u.id, {
+            other_user: { ...u, photo_url: u.photos?.[0] || u.photo_url || `https://picsum.photos/seed/${u.id}/100` },
             last_msg: 'Inizia una conversazione...',
             created_at: f.created_at || new Date().toISOString(),
             isSender: false,
@@ -8709,26 +8771,12 @@ const ChatPage = () => {
         }
       });
 
-      const sorted = Array.from(chatMap.values()).sort((a, b) =>
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      );
-      setActiveChats(sorted);
+      setActiveChats(Array.from(chatMap.values()).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
 
-      // 4. Fetch personal active flash banner
-      const { data: flashData } = await supabase
-        .from('banner_messages')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
-
-      if (flashData) {
-        if (new Date().getTime() - new Date(flashData.created_at).getTime() < 24 * 60 * 60 * 1000) {
-          setCurrentFlash(flashData);
-        } else {
-          setCurrentFlash(null);
-        }
+      if (flashData && (new Date().getTime() - new Date(flashData.created_at).getTime() < 24 * 60 * 60 * 1000)) {
+        setCurrentFlash(flashData);
+      } else {
+        setCurrentFlash(null);
       }
     } catch (e) { }
     setLoading(false);
@@ -8826,24 +8874,6 @@ const ChatPage = () => {
             100% { transform: translateY(-110vh) rotate(20deg); opacity: 0; }
           }
           .fha { animation: floatHeart var(--dur,12s) ease-in-out var(--delay,0s) infinite; position: absolute; bottom: -10%; }
-          @keyframes heartFlight1 {
-            0% { transform: translate(0, 0) scale(0) rotate(-10deg); opacity: 0; }
-            15% { opacity: 1; scale: 1.2; }
-            100% { transform: translate(-35px, -110px) scale(0.8) rotate(-30deg); opacity: 0; }
-          }
-          @keyframes heartFlight2 {
-            0% { transform: translate(0, 0) scale(0) rotate(10deg); opacity: 0; }
-            15% { opacity: 1; scale: 1.2; }
-            100% { transform: translate(35px, -110px) scale(0.8) rotate(30deg); opacity: 0; }
-          }
-          @keyframes heartFlight3 {
-            0% { transform: translate(0, 0) scale(0) rotate(0deg); opacity: 0; }
-            15% { opacity: 1; scale: 1.2; }
-            100% { transform: translate(0, -135px) scale(1) rotate(0deg); opacity: 0; }
-          }
-          .bha1 { animation: heartFlight1 var(--bdur,3.5s) ease-out var(--bdelay,0s) infinite; position: absolute; bottom: 10px; pointer-events: none; }
-          .bha2 { animation: heartFlight2 var(--bdur,3.5s) ease-out var(--bdelay,0s) infinite; position: absolute; bottom: 10px; pointer-events: none; }
-          .bha3 { animation: heartFlight3 var(--bdur,3.5s) ease-out var(--bdelay,0s) infinite; position: absolute; bottom: 10px; pointer-events: none; }
         `}</style>
         {[
           { left: '8%', size: 11, color: '#f43f5e', blur: 3, dur: 12, delay: 0 },
@@ -9431,6 +9461,8 @@ const ProfilePage = () => {
   const [isSavingSetup, setIsSavingSetup] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeletingProfile, setIsDeletingProfile] = useState(false);
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [isBannerExpanded, setIsBannerExpanded] = useState(false);
   const navigate = useNavigate();
 
   // Removed notification related states
@@ -9871,7 +9903,67 @@ const ProfilePage = () => {
         ))}
       </div>
 
-      {/* BANNER MANAGEMENT REMOVED */}
+      {/* ── PREMIUM UPGRADE BANNER (Solo per utenti Base) ── */}
+      {!user.is_paid && (
+        <motion.div
+          layout
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mx-4 mt-6 p-1 rounded-[32px] relative overflow-hidden group"
+          style={{ background: 'linear-gradient(135deg, rgba(147,51,234,0.3), rgba(79,70,229,0.3))', border: '1px solid rgba(147,51,234,0.3)' }}
+        >
+          <div className="bg-[#0a0a0f]/80 backdrop-blur-3xl rounded-[31px] p-5 space-y-4">
+             <div className="flex items-center justify-between cursor-pointer" onClick={() => setIsBannerExpanded(!isBannerExpanded)}>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-purple-600/20 rounded-xl flex items-center justify-center border border-purple-500/30">
+                    <Heart className="w-5 h-5 text-purple-400 fill-current animate-pulse" />
+                  </div>
+                  <div>
+                    <h3 className="text-[14px] font-black text-white uppercase tracking-wider">Passa a <span className="text-purple-500">Premium</span></h3>
+                    {!isBannerExpanded && <p className="text-[10px] text-white/40 font-bold uppercase tracking-tight">Sblocca funzioni esclusive</p>}
+                  </div>
+                </div>
+                <div 
+                   className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white/40 group-hover:text-white transition-all"
+                >
+                   {isBannerExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                </div>
+             </div>
+
+             <AnimatePresence>
+               {isBannerExpanded && (
+                 <motion.div
+                   initial={{ height: 0, opacity: 0 }}
+                   animate={{ height: 'auto', opacity: 1 }}
+                   exit={{ height: 0, opacity: 0 }}
+                   className="overflow-hidden space-y-4"
+                 >
+                   <p className="text-[11px] text-white/60 font-medium leading-relaxed">
+                     Sblocca SoulLink illimitati, vedi chi ti ha messo like, pubblica messaggi flash e molto altro ancora.
+                   </p>
+                   <div className="grid grid-cols-2 gap-3 pb-1">
+                     <button
+                       disabled
+                       className="py-4 bg-purple-600 text-white rounded-[18px] text-[10px] font-black uppercase tracking-widest shadow-lg shadow-purple-900/40 opacity-50 flex items-center justify-center gap-2"
+                     >
+                       <CreditCard className="w-4 h-4" /> Abbonati
+                     </button>
+                     <button
+                       onClick={(e) => { e.stopPropagation(); setShowPremiumModal(true); }}
+                       className="py-4 bg-white/5 border border-white/10 text-white rounded-[18px] text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2"
+                     >
+                       <Info className="w-4 h-4" /> Confronto Piani
+                     </button>
+                   </div>
+                 </motion.div>
+               )}
+             </AnimatePresence>
+          </div>
+        </motion.div>
+      )}
+
+      {/* ── DOCUMENT REJECTED BANNER (Profilo) ── */}
+      <SharedRejectedDocumentBanner currentUser={user as any} />
 
       {/* ── TAB BAR dark glass ── */}
       <div className="mx-4 mt-5 rounded-[24px] flex p-1.5 backdrop-blur-xl" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}>
@@ -10338,6 +10430,7 @@ const ProfilePage = () => {
           />
         )}
       </AnimatePresence>
+      <PremiumModal isOpen={showPremiumModal} onClose={() => setShowPremiumModal(false)} />
     </div >
   );
 };
@@ -10668,6 +10761,73 @@ const DmcaPage = () => (
     ]}
   />
 );
+
+const SharedRejectedDocumentBanner = ({ currentUser, onUploadSuccess }: { currentUser: UserProfile | null, onUploadSuccess?: () => void }) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  if (!currentUser?.doc_rejected) return null;
+  const remaining = calculateRemainingDays(currentUser.doc_rejected_at || null);
+
+  const handleDirectUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0] && currentUser) {
+      try {
+        const base64 = await fileToBase64(e.target.files[0]);
+        const { error } = await supabase.from('users').update({
+          id_document_url: base64,
+          doc_rejected: false,
+          doc_rejected_at: null,
+          is_suspended: false 
+        }).eq('id', currentUser.id);
+
+        if (!error) {
+          const saved = localStorage.getItem('soulmatch_user');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            localStorage.setItem('soulmatch_user', JSON.stringify({
+              ...parsed,
+              id_document_url: base64,
+              doc_rejected: false,
+              doc_rejected_at: null,
+              is_suspended: false
+            }));
+          }
+          window.dispatchEvent(new Event('user-auth-change'));
+          if (onUploadSuccess) onUploadSuccess();
+        }
+      } catch (err) {
+        console.error("Upload error:", err);
+      }
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="mx-4 mt-4 p-4 rounded-[28px] relative overflow-hidden group border border-rose-500/30"
+      style={{ background: 'linear-gradient(135deg, rgba(244,63,94,0.1), rgba(0,0,0,0.4))', backdropFilter: 'blur(20px)' }}
+    >
+      <input type="file" ref={fileInputRef} onChange={handleDirectUpload} accept="image/*,.pdf" className="hidden" />
+      <div className="flex items-start gap-4 relative z-10">
+        <div className="w-12 h-12 bg-rose-500/20 rounded-2xl flex items-center justify-center border border-rose-500/30 shrink-0">
+           <AlertTriangle className="w-6 h-6 text-rose-500" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <h3 className="text-[13px] font-black text-white uppercase tracking-wider">Documento <span className="text-rose-500">Rifiutato</span></h3>
+          <p className="text-[10px] text-stone-400 font-bold uppercase tracking-tight leading-loose mt-0.5">
+            Il documento caricato non è valido. Mancano <span className="text-rose-500">{remaining} giorni</span> alla sospensione definitiva del profilo. Caricalo ora.
+          </p>
+          <button 
+            onClick={() => fileInputRef.current?.click()}
+            className="mt-3 px-5 py-2.5 bg-rose-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-rose-900/40 active:scale-95 transition-all flex items-center gap-2"
+          >
+            <CloudUpload className="w-4 h-4" /> Vai al caricamento
+          </button>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
 
 const SecurityWarningSideBanner = () => {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
@@ -11112,6 +11272,24 @@ export default function App() {
         .animate-spin-slow {
           animation: spin-slow 8s linear infinite;
         }
+        @keyframes heartFlight1 {
+          0% { transform: translate(0, 0) scale(0) rotate(-10deg); opacity: 0; }
+          15% { opacity: 1; scale: 1.2; }
+          100% { transform: translate(-35px, -110px) scale(0.8) rotate(-30deg); opacity: 0; }
+        }
+        @keyframes heartFlight2 {
+          0% { transform: translate(0, 0) scale(0) rotate(10deg); opacity: 0; }
+          15% { opacity: 1; scale: 1.2; }
+          100% { transform: translate(35px, -110px) scale(0.8) rotate(30deg); opacity: 0; }
+        }
+        @keyframes heartFlight3 {
+          0% { transform: translate(0, 0) scale(0) rotate(0deg); opacity: 0; }
+          15% { opacity: 1; scale: 1.2; }
+          100% { transform: translate(0, -135px) scale(1) rotate(0deg); opacity: 0; }
+        }
+        .bha1 { animation: heartFlight1 var(--bdur,3.5s) ease-out var(--bdelay,0s) infinite; position: absolute; bottom: 10px; pointer-events: none; }
+        .bha2 { animation: heartFlight2 var(--bdur,3.5s) ease-out var(--bdelay,0s) infinite; position: absolute; bottom: 10px; pointer-events: none; }
+        .bha3 { animation: heartFlight3 var(--bdur,3.5s) ease-out var(--bdelay,0s) infinite; position: absolute; bottom: 10px; pointer-events: none; }
       `}</style>
       <BackgroundDecorations />
       <Navbar />
