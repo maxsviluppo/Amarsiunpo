@@ -1653,6 +1653,23 @@ const LiveChatPage = () => {
     };
   }, [profile, currentUser]);
 
+  // Mark chat as read when opened
+  useEffect(() => {
+    if (profile?.id && currentUser?.id) {
+      try {
+        const saved = localStorage.getItem('sm_read_chats');
+        const read = saved ? JSON.parse(saved) : [];
+        if (!read.includes(profile.id)) {
+          const updated = [...new Set([...read, profile.id])];
+          localStorage.setItem('sm_read_chats', JSON.stringify(updated));
+          // Notification to other components (like BottomNav and ChatPage)
+          window.dispatchEvent(new Event('chat-read-update'));
+          window.dispatchEvent(new Event('user-auth-change'));
+        }
+      } catch (e) { }
+    }
+  }, [profile?.id, currentUser?.id]);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
@@ -8523,7 +8540,41 @@ const ChatPage = () => {
       }
     };
     init();
+
+    // Event listener for chat read status update from LiveChatPage
+    const handleReadUpdate = () => {
+      try {
+        const s = localStorage.getItem('sm_read_chats');
+        if (s) setReadChatIds(new Set(JSON.parse(s)));
+      } catch (e) { }
+    };
+    window.addEventListener('chat-read-update', handleReadUpdate);
+
+    return () => {
+      window.removeEventListener('chat-read-update', handleReadUpdate);
+    };
   }, []);
+
+  // Real-time updates for ChatPage list
+  useEffect(() => {
+    if (!user) return;
+    const roomChannel = supabase.channel('chat_page_room')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'room_messages', filter: `receiver_id=eq.${user.id}` }, () => {
+        fetchData(user.id);
+      })
+      .subscribe();
+
+    const requestChannel = supabase.channel('chat_page_req')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_requests', filter: `to_user_id=eq.${user.id}` }, () => {
+        fetchData(user.id);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(roomChannel);
+      supabase.removeChannel(requestChannel);
+    };
+  }, [user]);
 
   const fetchData = async (userId: string) => {
     try {
@@ -8775,13 +8826,24 @@ const ChatPage = () => {
             100% { transform: translateY(-110vh) rotate(20deg); opacity: 0; }
           }
           .fha { animation: floatHeart var(--dur,12s) ease-in-out var(--delay,0s) infinite; position: absolute; bottom: -10%; }
-          @keyframes balloonHeart {
-            0%   { transform: translateY(0px) rotate(-6deg) scale(1); opacity: 0; }
-            8%   { opacity: 0.9; }
-            75%  { opacity: 0.7; }
-            100% { transform: translateY(-90px) rotate(8deg) scale(0.85); opacity: 0; }
+          @keyframes heartFlight1 {
+            0% { transform: translate(0, 0) scale(0) rotate(-10deg); opacity: 0; }
+            15% { opacity: 1; scale: 1.2; }
+            100% { transform: translate(-35px, -110px) scale(0.8) rotate(-30deg); opacity: 0; }
           }
-          .bha { animation: balloonHeart var(--bdur,5s) ease-in-out var(--bdelay,0s) infinite; position: absolute; bottom: 0px; pointer-events: none; }
+          @keyframes heartFlight2 {
+            0% { transform: translate(0, 0) scale(0) rotate(10deg); opacity: 0; }
+            15% { opacity: 1; scale: 1.2; }
+            100% { transform: translate(35px, -110px) scale(0.8) rotate(30deg); opacity: 0; }
+          }
+          @keyframes heartFlight3 {
+            0% { transform: translate(0, 0) scale(0) rotate(0deg); opacity: 0; }
+            15% { opacity: 1; scale: 1.2; }
+            100% { transform: translate(0, -135px) scale(1) rotate(0deg); opacity: 0; }
+          }
+          .bha1 { animation: heartFlight1 var(--bdur,3.5s) ease-out var(--bdelay,0s) infinite; position: absolute; bottom: 10px; pointer-events: none; }
+          .bha2 { animation: heartFlight2 var(--bdur,3.5s) ease-out var(--bdelay,0s) infinite; position: absolute; bottom: 10px; pointer-events: none; }
+          .bha3 { animation: heartFlight3 var(--bdur,3.5s) ease-out var(--bdelay,0s) infinite; position: absolute; bottom: 10px; pointer-events: none; }
         `}</style>
         {[
           { left: '8%', size: 11, color: '#f43f5e', blur: 3, dur: 12, delay: 0 },
@@ -8941,7 +9003,11 @@ const ChatPage = () => {
                   {activeChats
                     .filter((c) => c.other_user?.name?.toLowerCase().includes(searchTerm.toLowerCase()))
                     .map((chat) => {
-                      const notify = chatRequests.some(r => r.from_user_id === chat.other_user.id && r.status === 'pending') && !readChatIds.has(chat.other_user.id);
+                      // Se l'ultimo messaggio non è mio ed è diverso dall'invito standard, ed il chatId NON è nei letti
+                      const isUnread = (!chat.isSender && chat.last_msg !== 'Inizia una conversazione...') && !readChatIds.has(chat.other_user.id);
+                      // Se c'è una richiesta pendente (async)
+                      const hasRequest = chatRequests.some(r => r.from_user_id === chat.other_user.id && r.status === 'pending') && !readChatIds.has(chat.other_user.id);
+                      const notify = isUnread || hasRequest;
                       const hasUnread = notify;
 
                       return (
@@ -8999,21 +9065,22 @@ const ChatPage = () => {
                           >
                             {/* Balloon hearts — large, glowing, slow bob */}
                             {notify && [
-                              { left: 12, size: 18, color: '#f43f5e', dur: 4.2, delay: 0, bot: 8 },
-                              { left: 30, size: 14, color: '#fb7185', dur: 3.8, delay: 0.7, bot: 14 },
-                              { left: 50, size: 22, color: '#f43f5e', dur: 4.8, delay: 0.3, bot: 6 },
-                              { left: 69, size: 16, color: '#fda4af', dur: 3.6, delay: 1.1, bot: 12 },
-                              { left: 85, size: 14, color: '#f43f5e', dur: 4.4, delay: 0.55, bot: 10 },
+                              { left: 18, size: 24, color: '#f43f5e', dur: 4.2, delay: 0.2, cls: 'bha1' },
+                              { left: 24, size: 16, color: '#fb7185', dur: 3.8, delay: 0.8, cls: 'bha2' },
+                              { left: 34, size: 22, color: '#f43f5e', dur: 4.8, delay: 0.4, cls: 'bha3' },
+                              { left: 45, size: 18, color: '#fda4af', dur: 3.6, delay: 1.2, cls: 'bha1' },
+                              { left: 58, size: 16, color: '#f43f5e', dur: 4.4, delay: 0.6, cls: 'bha2' },
+                              { left: 65, size: 20, color: '#ec4899', dur: 4.1, delay: 0.2, cls: 'bha3' },
+                              { left: 75, size: 18, color: '#f43f5e', dur: 3.9, delay: 0.9, cls: 'bha1' },
                             ].map((h, i) => (
                               <div
                                 key={i}
-                                className="bha"
+                                className={h.cls}
                                 style={{
                                   left: `${h.left}%`,
-                                  bottom: h.bot,
                                   '--bdur': `${h.dur}s`,
                                   '--bdelay': `${h.delay}s`,
-                                  filter: `drop-shadow(0 0 6px ${h.color}) drop-shadow(0 0 12px ${h.color}80)`,
+                                  filter: `drop-shadow(0 0 8px ${h.color}cc)`,
                                 } as React.CSSProperties}
                               >
                                 <svg width={h.size} height={h.size} viewBox="0 0 24 24" fill={h.color}>
