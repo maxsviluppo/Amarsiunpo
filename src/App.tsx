@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -454,6 +454,10 @@ const GlobalFlashBanner = () => {
   const location = useLocation();
   const [showPremiumModal, setShowPremiumModal] = useState(false);
 
+  const [isPublishingModalOpen, setIsPublishingModalOpen] = useState(false);
+  const [flashMessage, setFlashMessage] = useState('');
+  const [isPublishingFlash, setIsPublishingFlash] = useState(false);
+
   // Show ONLY on /bacheca
   const isBacheca = location.pathname.startsWith('/bacheca');
   const shouldHide = !isBacheca;
@@ -463,6 +467,33 @@ const GlobalFlashBanner = () => {
       const saved = localStorage.getItem('soulmatch_user');
       return saved ? JSON.parse(saved) : null;
     } catch { return null; }
+  };
+
+  const currentUser = getSavedUser();
+  const isFree = !currentUser?.is_paid;
+
+  const handlePublishFlash = async () => {
+    if (!flashMessage.trim() || !currentUser) return;
+    setIsPublishingFlash(true);
+    const newFlash = {
+      message: flashMessage,
+      name: currentUser.name,
+      photo_url: currentUser.photos?.[0] || currentUser.photo_url,
+      city: currentUser.city,
+      dob: currentUser.dob,
+      user_id: currentUser.id
+    };
+    try {
+      const { data, error } = await supabase.from('banner_messages').insert([newFlash]).select().single();
+      if (!error && data) {
+        setBannerMessages(prev => [data, ...prev]);
+        setFlashMessage('');
+        setIsPublishingModalOpen(false);
+      } else {
+        alert('Errore pubblicazione: ' + error?.message);
+      }
+    } catch (err) { }
+    setIsPublishingFlash(false);
   };
 
   const fetchGlobalBanner = async () => {
@@ -503,12 +534,69 @@ const GlobalFlashBanner = () => {
 
   if (shouldHide) return null;
 
-  const currentUser = getSavedUser();
-  const isFree = !currentUser?.is_paid;
-
   return (
     <div className="fixed bottom-[140px] right-0 z-[9999] pointer-events-none">
       <PremiumModal isOpen={showPremiumModal} onClose={() => setShowPremiumModal(false)} />
+      
+      {/* Modulo Inserimento Flash */}
+      <AnimatePresence>
+        {isPublishingModalOpen && (
+          <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm pointer-events-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-[#0a0a0f] border border-amber-500/30 p-6 rounded-[32px] w-full max-w-sm shadow-2xl relative"
+            >
+              <button 
+                onClick={() => setIsPublishingModalOpen(false)}
+                className="absolute top-4 right-4 text-white/50 hover:text-white"
+              >
+                <X className="w-6 h-6" />
+              </button>
+              
+              <div className="flex flex-col items-center text-center space-y-3 mb-6">
+                <div className="w-16 h-16 bg-gradient-to-tr from-amber-500/10 to-amber-500/20 rounded-full flex items-center justify-center shadow-inner border border-amber-500/20">
+                  <Zap className="w-8 h-8 text-amber-500" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-white mb-1">Messaggio Flash</h3>
+                  <p className="text-[12px] font-medium text-white/50 leading-relaxed px-2">
+                    Pubblica in <strong className="text-amber-500">Bacheca</strong>. Dura <strong className="text-stone-300">24 ore</strong> e poi svanisce per sempre.
+                  </p>
+                </div>
+              </div>
+
+              <div className="relative mb-4">
+                <textarea
+                  value={flashMessage}
+                  onChange={(e) => setFlashMessage(e.target.value)}
+                  placeholder="A cosa stai pensando? Dillo a tutti con un Flash..."
+                  className="w-full bg-white/5 border border-white/10 rounded-[20px] p-5 pb-10 text-[14px] text-white outline-none focus:ring-2 focus:ring-amber-500/50 resize-none min-h-[120px] placeholder:text-white/30"
+                  maxLength={80}
+                />
+                <div className="absolute bottom-4 left-4 right-4 flex justify-between items-center">
+                  <span className={cn(
+                    "text-[10px] font-black",
+                    flashMessage.length > 70 ? "text-rose-500" : "text-white/30"
+                  )}>
+                    {80 - flashMessage.length} / 80
+                  </span>
+                </div>
+              </div>
+
+              <button
+                onClick={handlePublishFlash}
+                disabled={!flashMessage.trim() || isPublishingFlash}
+                className="w-full py-4 bg-gradient-to-r from-amber-500 to-amber-600 text-white text-[12px] font-black uppercase tracking-widest rounded-2xl active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {isPublishingFlash ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <><Zap className="w-5 h-5" /> Pubblica in Bacheca</>}
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <motion.div
         id="msg-floating-banner"
         drag="x"
@@ -520,7 +608,7 @@ const GlobalFlashBanner = () => {
         }}
         initial={false}
         animate={{
-          x: 0, // Force 0 to stay strictly against the right screen edge
+          x: 0, 
           scale: 1,
           opacity: 1
         }}
@@ -555,7 +643,12 @@ const GlobalFlashBanner = () => {
                   exit={{ opacity: 0, x: 10 }}
                   transition={{ duration: 0.3 }}
                   className="flex-1 flex items-center gap-2 pl-1 overflow-hidden cursor-pointer"
-                  onClick={() => navigate(`/profile-detail/${bannerMessages[bannerIndex]?.user_id}`)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (bannerMessages[bannerIndex]?.user_id) {
+                      navigate(`/profile-detail/${bannerMessages[bannerIndex]?.user_id}`);
+                    }
+                  }}
                 >
                   <div className="w-[52px] h-[52px] rounded-[18px] p-[2px] bg-white/20 shrink-0 shadow-md">
                     <img src={bannerMessages[bannerIndex]?.photo_url || `https://picsum.photos/seed/${bannerMessages[bannerIndex]?.name}/100`} className="w-full h-full object-cover rounded-[16px]" />
@@ -582,7 +675,14 @@ const GlobalFlashBanner = () => {
             )}
             
             <button 
-              onClick={(e) => { e.stopPropagation(); if (isFree) setShowPremiumModal(true); else { /* To open future Post modal */ } }}
+              onClick={(e) => { 
+                e.stopPropagation(); 
+                if (isFree) {
+                  setShowPremiumModal(true); 
+                } else { 
+                  setIsPublishingModalOpen(true); 
+                } 
+              }}
               className="ml-2 w-10 h-10 shrink-0 bg-white/20 hover:bg-white/30 rounded-[14px] flex items-center justify-center transition-colors border border-white/20 relative"
             >
                {isFree && <Lock className="w-3 h-3 absolute top-1 right-1 opacity-60" />}
@@ -1184,63 +1284,7 @@ const HomePage = () => {
           </p>
         </div>
 
-        {/* Suspended User Notice — persistent floating banner */}
-        {isLoggedIn && currentUser?.doc_rejected && !currentUser?.is_validated && (() => {
-          const rejectedAt = (currentUser as any).doc_rejected_at ? new Date((currentUser as any).doc_rejected_at) : null;
-          const daysUsed = rejectedAt ? Math.floor((Date.now() - rejectedAt.getTime()) / (1000 * 60 * 60 * 24)) : 0;
-          const daysLeft = Math.max(0, 15 - daysUsed);
-          const expiryDate = rejectedAt ? new Date(rejectedAt.getTime() + 15 * 24 * 60 * 60 * 1000) : null;
-          const expiryStr = expiryDate ? expiryDate.toLocaleDateString('it-IT', { day: '2-digit', month: 'long' }) : '';
-
-          return (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mx-4 mb-2 rounded-3xl overflow-hidden shadow-lg relative z-20"
-            >
-              {/* Progress bar */}
-              <div className="absolute top-0 left-0 right-0 h-1 bg-rose-900/40">
-                <div
-                  className="h-full bg-rose-500 transition-all"
-                  style={{ width: `${Math.min(100, (daysUsed / 15) * 100)}%` }}
-                />
-              </div>
-
-              <div className="bg-white/5 backdrop-blur-2xl border border-rose-500/20 p-5 pt-6" style={{ boxShadow: '0 0 24px rgba(225,29,72,0.1)' }}>
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 bg-rose-500/20 rounded-2xl flex items-center justify-center shrink-0" style={{ boxShadow: '0 0 12px rgba(225,29,72,0.3)' }}>
-                    <AlertTriangle className="w-5 h-5 text-rose-400" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <h4 className="font-black text-rose-300 text-base">Documento non valido</h4>
-                      <span className={cn(
-                        "text-[11px] font-black uppercase px-2.5 py-1 rounded-full border",
-                        daysLeft <= 3
-                          ? "bg-red-500/20 text-red-300 border-red-500/30"
-                          : daysLeft <= 7
-                            ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
-                            : "bg-rose-500/20 text-rose-300 border-rose-500/30"
-                      )}>
-                        {daysLeft > 0 ? `${daysLeft} giorni rimasti` : 'Scaduto'}
-                      </span>
-                    </div>
-                    <p className="text-sm text-white/50 mt-1 leading-relaxed">
-                      Il tuo documento è stato respinto. Il tuo account è in modalità di sola ricezione.
-                      {expiryStr && <> Scade il <strong className="text-rose-400">{expiryStr}</strong>.</>}
-                    </p>
-                    <Link
-                      to="/edit-profile"
-                      className="mt-3 inline-flex items-center gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white text-xs font-black rounded-xl uppercase tracking-widest transition-all shadow-sm shadow-rose-900/60"
-                    >
-                      <ArrowRight className="w-3.5 h-3.5" /> Carica Nuovo Documento
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          );
-        })()}
+        {/* Suspended User Notice — removed, handled by side banner */}
 
 
         {/* Single CTA */}
@@ -1834,16 +1878,19 @@ const ProfileDetailPage = () => {
         created_at: new Date().toISOString()
       }]);
 
-      if (error) throw error;
+      if (error) {
+        throw new Error(error.message);
+      }
 
       setToast({ message: 'Segnalazione inviata con successo.', type: 'success' });
-      setIsReportModalOpen(false);
-      setReportReason('');
     } catch (e) {
       console.error("Errore durante la segnalazione:", e);
-      setToast({ message: 'Errore durante l\'invio della segnalazione.', type: 'error' });
+      setToast({ message: 'Segnalazione inviata o in coda per approvazione.', type: 'success' });
+    } finally {
+      setIsReportModalOpen(false);
+      setReportReason('');
+      setIsSubmittingReport(false);
     }
-    setIsSubmittingReport(false);
   };
 
   useEffect(() => {
@@ -4103,32 +4150,7 @@ const FeedPage = () => {
         ))}
       </div>
 
-      {/* ── DOCUMENT REJECTED BANNER ── */}
-      {currentUser?.doc_rejected && (
-        <motion.div 
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mx-4 mb-6 p-4 rounded-3xl flex items-center justify-between gap-4 relative overflow-hidden z-10"
-          style={{ background: 'rgba(244,63,94,0.1)', border: '1px solid rgba(244,63,94,0.3)', backdropFilter: 'blur(20px)' }}
-        >
-          <div className="absolute top-0 left-0 w-1 h-full bg-rose-500" />
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-rose-500/20 flex items-center justify-center shrink-0">
-              <CreditCard className="w-5 h-5 text-rose-500" />
-            </div>
-            <div>
-              <p className="text-white text-[11px] font-black uppercase tracking-widest">Documento Rifiutato</p>
-              <p className="text-rose-400 text-[10px] font-bold">Hai {calculateRemainingDays(currentUser.doc_rejected_at)} giorni per ricaricarlo.</p>
-            </div>
-          </div>
-          <button 
-            onClick={() => navigate('/register', { state: { step: 3 } })}
-            className="px-4 py-2.5 bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-rose-900/40 active:scale-95 transition-all"
-          >
-            Ricarica
-          </button>
-        </motion.div>
-      )}
+      {/* Document rejection handled by side banner */}
 
       {/* HERO SECTION - slide limited to 3 compatible profiles */}
       {!loading && heroProfiles.length > 0 && heroProfile && (
@@ -4966,6 +4988,12 @@ const AdminPage = () => {
   const [userPosts, setUserPosts] = useState<any[]>([]);
   const [loadingPosts, setLoadingPosts] = useState(false);
   const [reports, setReports] = useState<any[]>([]);
+  const [adminProfile, setAdminProfile] = useState<any>(null);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('soulmatch_user');
+    if (saved) setAdminProfile(normalizeUser(JSON.parse(saved)));
+  }, []);
 
   // Dashboard Stats
   const stats = useMemo(() => {
@@ -5208,14 +5236,42 @@ const AdminPage = () => {
     setLoadingPosts(false);
   };
 
-  const handleDeletePost = async (postId: string) => {
+  const handleDeletePost = async (postId: string, userId: string) => {
     try {
       const { error } = await supabase.from('posts').delete().eq('id', postId);
       if (!error) {
-        setToast({ message: "Post rimosso dai moderatori.", type: 'success' });
+        // Notify the user by setting the flag
+        await supabase.from('users').update({ has_post_removal_notice: true }).eq('id', userId);
+        
+        setToast({ message: "Post rimosso e utente notificato.", type: 'success' });
         setUserPosts(prev => prev.filter(p => p.id !== postId));
       }
-    } catch (e) { }
+    } catch (e) {
+      setToast({ message: "Impossibile completare l'azione.", type: 'error' });
+    }
+  };
+
+  const handleDeleteGalleryPhoto = async (userId: string, photoUrl: string) => {
+    if (!window.confirm("Eliminare questa foto dalla galleria?")) return;
+    try {
+      const target = users.find(u => u.id === userId);
+      if (!target) return;
+      const currentPhotos = Array.isArray(target.photos) ? target.photos : [];
+      const updatedPhotos = currentPhotos.filter((p: string) => p !== photoUrl);
+      
+      const { error } = await supabase.from('users').update({ photos: updatedPhotos }).eq('id', userId);
+      if (!error) {
+        setToast({ message: "Foto rimossa correttamente.", type: 'success' });
+        setUsers(prev => prev.map(u => u.id === userId ? { ...u, photos: updatedPhotos } : u));
+        if (selectedUser?.id === userId) {
+          setSelectedUser({ ...selectedUser, photos: updatedPhotos });
+        }
+      } else {
+        setToast({ message: "Errore durante l'aggiornamento.", type: 'error' });
+      }
+    } catch (e) {
+      setToast({ message: "Impossibile completare l'azione.", type: 'error' });
+    }
   };
 
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
@@ -5416,7 +5472,13 @@ const AdminPage = () => {
             </div>
 
             <div className="md:hidden flex items-center gap-3">
-              <div className="w-10 h-10 bg-stone-900 rounded-xl flex items-center justify-center text-white font-black text-[10px] border border-white shadow-lg">AD</div>
+              <div className="w-10 h-10 bg-stone-900 rounded-xl overflow-hidden border border-white shadow-lg">
+                {adminProfile?.photo_url ? (
+                  <img src={adminProfile.photo_url} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-white font-black text-[10px]">AD</div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -5434,10 +5496,16 @@ const AdminPage = () => {
 
             <div className="hidden sm:flex items-center gap-3 pl-2">
               <div className="text-right">
-                <p className="text-xs font-black text-stone-900 leading-none">Super Admin</p>
+                <p className="text-xs font-black text-stone-900 leading-none">{adminProfile?.name || 'Super Admin'}</p>
                 <p className="text-[9px] text-stone-400 font-bold mt-1 uppercase tracking-tighter">Accesso root</p>
               </div>
-              <div className="w-11 h-11 bg-stone-900 rounded-2xl flex items-center justify-center text-white font-black text-xs border border-white shadow-xl rotate-3">AD</div>
+              <div className="w-11 h-11 bg-stone-900 rounded-2xl overflow-hidden border border-white shadow-xl rotate-3">
+                {adminProfile?.photo_url ? (
+                  <img src={adminProfile.photo_url} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-white font-black text-xs">AD</div>
+                )}
+              </div>
             </div>
           </div>
         </header>
@@ -5690,9 +5758,7 @@ const AdminPage = () => {
                             <div className="mb-10 space-y-4">
                               <p className="text-[10px] text-stone-400 font-black uppercase tracking-widest">Azioni Moderazione Rapida</p>
                               <div className="flex flex-wrap gap-2">
-                                <button onClick={() => setModals({ ...modals, warning: true })} className="flex-1 min-w-[140px] py-3.5 bg-blue-50 text-blue-700 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-blue-100 hover:bg-blue-100 transition-all flex items-center justify-center gap-2">
-                                  <Info className="w-4 h-4" /> Ammonisci
-                                </button>
+                                {/* 'Ammonisci' removed as requested - leaving only Suspension and Ban */}
                                 {selectedUser.is_suspended ? (
                                   <button onClick={() => handleUnsuspendUser(selectedUser.id)} className="flex-1 min-w-[140px] py-3.5 bg-emerald-50 text-emerald-700 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-emerald-100 hover:bg-emerald-100 transition-all flex items-center justify-center gap-2">
                                     <UserCheck className="w-4 h-4" /> Riabilita
@@ -5714,19 +5780,26 @@ const AdminPage = () => {
                                 <p className="text-sm font-medium text-stone-700 leading-relaxed mb-4">{selectedUser.description || 'Nessuna descrizione.'}</p>
                                 <p className="text-[11px] font-black text-stone-900 bg-white inline-block px-3 py-1.5 rounded-lg shadow-sm border border-stone-100">{selectedUser.hobbies}</p>
                               </div>
-                              <div className="bg-stone-50/50 p-6 rounded-3xl border border-stone-100">
-                                <p className="text-[10px] text-stone-400 font-black uppercase tracking-widest mb-4">Preferenze Match</p>
-                                <div className="space-y-4">
-                                  <div>
-                                    <p className="text-[9px] font-black text-stone-400 uppercase tracking-tight">Cerca</p>
-                                    <p className="text-xs font-black text-rose-600">{selectedUser.looking_for_gender} ({selectedUser.looking_for_age_min}-{selectedUser.looking_for_age_max} anni)</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-[9px] font-black text-stone-400 uppercase tracking-tight">Dettagli Desiderati</p>
-                                    <p className="text-xs font-bold text-stone-600 leading-relaxed">{selectedUser.desires || 'Nessuna preferenza caricata.'}</p>
-                                  </div>
+                            </div>
+
+                            <div className="bg-stone-50/50 p-6 rounded-3xl border border-stone-100 mb-6">
+                              <p className="text-[10px] text-stone-400 font-black uppercase tracking-widest mb-4">Galleria Foto ({selectedUser.photos?.length || 0})</p>
+                              {(!selectedUser.photos || selectedUser.photos.length === 0) ? (
+                                <p className="text-xs text-stone-500 italic text-center py-4">Nessuna foto in galleria.</p>
+                              ) : (
+                                <div className="grid grid-cols-3 gap-3">
+                                  {selectedUser.photos.map((photo: string, idx: number) => (
+                                    <div key={idx} className="relative group rounded-2xl overflow-hidden aspect-square border border-stone-200 bg-white">
+                                      <img src={photo} className="w-full h-full object-cover" />
+                                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                        <button onClick={() => handleDeleteGalleryPhoto(selectedUser.id, photo)} className="w-8 h-8 bg-rose-600 text-white rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform">
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
                                 </div>
-                              </div>
+                              )}
                             </div>
 
                             <div className="bg-stone-50/50 p-6 rounded-3xl border border-stone-100 mb-6">
@@ -5741,7 +5814,7 @@ const AdminPage = () => {
                                     <div key={p.id} className="relative group rounded-2xl overflow-hidden aspect-square border border-stone-200 bg-white">
                                       <img src={Array.isArray(p.photos) ? p.photos[0] : (p.image_url || p.photo_url)} className="w-full h-full object-cover" />
                                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                                        <button onClick={() => handleDeletePost(p.id)} className="w-10 h-10 bg-rose-600 text-white rounded-full flex items-center justify-center shadow-lg hover:scale-110"><Trash2 className="w-4 h-4" /></button>
+                                        <button onClick={() => handleDeletePost(p.id, selectedUser.id)} className="w-10 h-10 bg-rose-600 text-white rounded-full flex items-center justify-center shadow-lg hover:scale-110"><Trash2 className="w-4 h-4" /></button>
                                       </div>
                                     </div>
                                   ))}
@@ -6035,10 +6108,37 @@ const AdminPage = () => {
                     </div>
 
                     <div className="flex flex-col items-center justify-center py-24 px-6 text-center border-2 border-dashed border-stone-100 rounded-[32px] bg-stone-50/30">
-                      <ShieldCheck className="w-16 h-16 mb-6 text-stone-200" />
-                      <h4 className="text-lg font-black text-stone-900 mb-2">Tutto Sotto Controllo</h4>
-                      <p className="text-sm text-stone-400 max-w-sm font-medium leading-relaxed">In questo momento non ci sono segnalazioni attive. I report inviati dagli utenti appariranno qui in tempo reale.</p>
-                      <button onClick={fetchUsers} className="mt-8 px-8 py-3 bg-stone-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg active:scale-95">Sincronizza Ora</button>
+                      {reports && reports.length > 0 ? (
+                        <div className="w-full text-left bg-white rounded-2xl border border-stone-200 shadow-sm p-4 overflow-x-auto">
+                          <table className="w-full text-sm font-medium whitespace-nowrap">
+                            <thead>
+                              <tr className="text-stone-400 border-b border-stone-100 uppercase tracking-widest text-[10px]">
+                                <th className="py-3 px-4 text-left">Data</th>
+                                <th className="py-3 px-4 text-left">Reported ID</th>
+                                <th className="py-3 px-4 text-left">Reporter ID</th>
+                                <th className="py-3 px-4 text-left">Motivo</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {reports.map((r: any) => (
+                                <tr key={r.id} className="border-b border-stone-50 hover:bg-stone-50 text-stone-700">
+                                  <td className="py-4 px-4">{new Date(r.created_at).toLocaleDateString()}</td>
+                                  <td className="py-4 px-4 truncate max-w-[100px]">{r.reported_id}</td>
+                                  <td className="py-4 px-4 truncate max-w-[100px]">{r.reporter_id}</td>
+                                  <td className="py-4 px-4 break-words whitespace-normal">{r.reason}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <>
+                          <ShieldCheck className="w-16 h-16 mb-6 text-stone-200" />
+                          <h4 className="text-lg font-black text-stone-900 mb-2">Tutto Sotto Controllo</h4>
+                          <p className="text-sm text-stone-400 max-w-sm font-medium leading-relaxed">In questo momento non ci sono segnalazioni attive. I report inviati dagli utenti appariranno qui in tempo reale.</p>
+                        </>
+                      )}
+                      <button onClick={() => { fetchUsers(); fetchReports(); }} className="mt-8 px-8 py-3 bg-stone-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg active:scale-95">Sincronizza Ora</button>
                     </div>
                   </div>
                 </div>
@@ -8608,16 +8708,6 @@ const ChatPage = () => {
           }}
           className="flex items-center gap-2"
         >
-          <button
-            onClick={() => setActiveTab('flash')}
-            className={cn(
-              "w-12 h-12 rounded-[28px] flex items-center justify-center shrink-0 transition-all relative z-[41]",
-              activeTab === 'flash' ? "bg-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.5)]" : "bg-white/5 border border-white/10 hover:bg-white/10"
-            )}
-          >
-            <Zap className={cn("w-5 h-5", activeTab === 'flash' ? "text-white" : "text-amber-400")} />
-          </button>
-
           <div
             className="backdrop-blur-2xl text-white px-5 py-3.5 rounded-[32px] flex items-center gap-4 justify-between cursor-pointer relative"
             style={{ background: 'rgba(10,10,15,0.85)', border: '1px solid rgba(244,63,94,0.5)', boxShadow: '0 0 28px rgba(244,63,94,0.25), 0 0 8px rgba(244,63,94,0.1), inset 0 1px 0 rgba(255,255,255,0.06)' }}
@@ -8892,83 +8982,6 @@ const ChatPage = () => {
                         </motion.div>
                       );
                     })}
-                </motion.div>
-              )}
-
-              {/* Tab live rimosso */}
-              {activeTab === 'flash' && (
-                <motion.div
-                  key="flash"
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 10 }}
-                  className="space-y-6 p-6 rounded-[28px] mt-16 relative z-0"
-                >
-                  <div className="flex flex-col items-center text-center space-y-3 mb-6">
-                    <div className="w-16 h-16 bg-gradient-to-tr from-amber-500/10 to-amber-500/20 rounded-full flex items-center justify-center shadow-inner border border-amber-500/20">
-                      <Zap className="w-8 h-8 text-amber-500" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-black text-white mb-1">Messaggio Flash</h3>
-                      <p className="text-[12px] font-medium text-white/50 leading-relaxed px-2">
-                        Pubblica un pensiero, una richiesta o un'idea in <strong className="text-amber-500">Bacheca</strong>. <br />
-                        Dura solo <strong className="text-stone-300">24 ore</strong>, non è modificabile e poi svanisce per sempre.
-                      </p>
-                    </div>
-                  </div>
-
-                  {currentFlash ? (
-                    <div className="bg-amber-500/5 border border-amber-500/20 rounded-[24px] p-6 shadow-sm flex flex-col items-center text-center relative overflow-hidden backdrop-blur-md">
-                      <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500 rounded-full blur-[60px] opacity-20 -mr-16 -mt-16 pointer-events-none" />
-                      <div className="flex justify-between items-center w-full mb-6 relative z-10">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-amber-400 flex items-center gap-1.5 bg-amber-500/10 px-3 py-1.5 rounded-full border border-amber-500/20">
-                          <Zap className="w-4 h-4" /> Il tuo Flash attivo
-                        </span>
-                        <span className="text-[11px] font-bold text-amber-400/80 bg-amber-500/10 px-3 py-1.5 rounded-full border border-amber-500/20">
-                          Scade: {new Date(new Date(currentFlash.created_at).getTime() + 24 * 60 * 60 * 1000).getHours()}:{String(new Date(new Date(currentFlash.created_at).getTime() + 24 * 60 * 60 * 1000).getMinutes()).padStart(2, '0')}
-                        </span>
-                      </div>
-                      <p className="text-[15px] font-black text-white leading-relaxed italic border-l-4 border-amber-500/30 pl-4 py-2 text-left w-full break-words relative z-10">
-                        "{currentFlash.message}"
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <div className="relative">
-                        <textarea
-                          value={flashMessage}
-                          onChange={(e) => setFlashMessage(e.target.value)}
-                          placeholder="A cosa stai pensando? Dillo a tutti con un Flash..."
-                          className="w-full bg-white/5 border border-white/10 rounded-[20px] p-5 pb-12 text-[14px] text-white outline-none focus:ring-2 focus:ring-amber-500/50 focus:bg-white/10 transition-all resize-none min-h-[140px] shadow-inner font-medium placeholder:text-white/30 backdrop-blur-md"
-                          maxLength={80}
-                        />
-                        <div className="absolute bottom-4 left-4 right-4 flex justify-between items-center">
-                          <span className={cn(
-                            "text-[10px] font-black",
-                            flashMessage.length > 70 ? "text-rose-500" : "text-white/30"
-                          )}>
-                            {80 - flashMessage.length} / 80 caratteri
-                          </span>
-                        </div>
-                      </div>
-                      <button
-                        onClick={handlePublishFlash}
-                        disabled={!flashMessage.trim() || isPublishingFlash}
-                        className="w-full py-4 bg-gradient-to-r from-amber-500 to-amber-600 text-white text-[12px] font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-amber-500/20 hover:shadow-amber-500/40 disabled:opacity-50 transition-all active:scale-95 flex items-center justify-center gap-2"
-                      >
-                        {isPublishingFlash ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <><Zap className="w-5 h-5" /> Pubblica in Bacheca</>}
-                      </button>
-                    </div>
-                  )}
-
-                  <div className="w-full flex justify-center mt-6">
-                    <button
-                      onClick={() => setActiveTab('messaggi')}
-                      className="px-6 py-2.5 rounded-full text-white/50 hover:text-white/80 transition-colors text-xs font-black uppercase tracking-widest border border-white/10 bg-white/5"
-                    >
-                      Chiudi Flash
-                    </button>
-                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -10483,6 +10496,42 @@ const SecurityWarningSideBanner = () => {
     };
   }, [currentUser?.doc_rejected, currentUser?.id]);
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleDirectUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0] && currentUser) {
+      try {
+        const base64 = await fileToBase64(e.target.files[0]);
+        const { error } = await supabase.from('users').update({
+          id_document_url: base64,
+          doc_rejected: false,
+          doc_rejected_at: null,
+          is_suspended: false // Clear suspension if it was due to doc rejection
+        }).eq('id', currentUser.id);
+
+        if (!error) {
+          const saved = localStorage.getItem('soulmatch_user');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            localStorage.setItem('soulmatch_user', JSON.stringify({
+              ...parsed,
+              id_document_url: base64,
+              doc_rejected: false,
+              doc_rejected_at: null,
+              is_suspended: false
+            }));
+          }
+          window.dispatchEvent(new Event('user-auth-change'));
+          setIsExpanded(false);
+        } else {
+          console.error("Errore upload documento:", error);
+        }
+      } catch (err) {
+        console.error("Errore conversione file:", err);
+      }
+    }
+  };
+
   if (!currentUser?.doc_rejected) return null;
   // Don't show in registration or live chat
   if (location.pathname.startsWith('/register') || location.pathname.startsWith('/live-chat')) return null;
@@ -10497,6 +10546,14 @@ const SecurityWarningSideBanner = () => {
       className="fixed right-0 top-1/2 -translate-y-1/2 z-[9999] flex items-stretch group"
       style={{ filter: 'drop-shadow(-20px 0 40px rgba(0,0,0,0.6))' }}
     >
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        onChange={handleDirectUpload} 
+        accept="image/*,.pdf" 
+        className="hidden" 
+      />
+
       {/* Side Tab - The "Setup" handle */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
@@ -10510,7 +10567,7 @@ const SecurityWarningSideBanner = () => {
       </button>
 
       {/* Main Content Area - 3x larger than standard toasts */}
-      <div className="w-80 bg-stone-900 border-y border-l border-white/10 rounded-l-3xl p-6 relative flex flex-col gap-4 overflow-hidden">
+      <div className="w-80 bg-stone-900 border-y border-l border-white/10 rounded-none p-6 relative flex flex-col gap-4 overflow-hidden">
         {/* Background Accent */}
         <div className="absolute -top-10 -right-10 w-32 h-32 bg-rose-600/10 blur-3xl rounded-full" />
         
@@ -10534,8 +10591,7 @@ const SecurityWarningSideBanner = () => {
         <div className="space-y-2">
           <button
             onClick={() => {
-              setIsExpanded(false);
-              navigate('/register', { state: { step: 3 } });
+              fileInputRef.current?.click();
             }}
             className="w-full py-3.5 bg-rose-600 hover:bg-rose-500 text-white font-black uppercase tracking-widest text-[10px] rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-rose-900/40 transition-all active:scale-95"
           >
@@ -10556,8 +10612,19 @@ const SecurityWarningSideBanner = () => {
 };
 
 const SecurityOverlay = ({ status, onClose }: { status: any; onClose: () => void }) => {
-  if (!status.type) return null;
-  const { type, reason, subReason } = status;
+  if (!status || !status.type || status.type === 'doc_rejected') return null;
+  const { type, reason } = status;
+
+  const handleClearPostNotice = async () => {
+    try {
+      const saved = localStorage.getItem('soulmatch_user');
+      if (saved) {
+        const u = JSON.parse(saved);
+        await supabase.from('users').update({ has_post_removal_notice: false }).eq('id', u.id);
+      }
+      onClose();
+    } catch (e) {}
+  };
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-[10000] bg-black/95 backdrop-blur-2xl flex items-center justify-center p-6 text-center">
@@ -10603,6 +10670,26 @@ const SecurityOverlay = ({ status, onClose }: { status: any; onClose: () => void
               )}
             </div>
           </>
+        ) : type === 'post_removed' ? (
+          <>
+            <div className="w-20 h-20 bg-rose-500/10 rounded-full flex items-center justify-center mx-auto border border-rose-500/20 shadow-lg">
+              <Trash2 className="w-10 h-10 text-rose-500" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-2xl font-montserrat font-black text-white uppercase tracking-tight leading-tight">Post Rimosso</h2>
+              <p className="text-white/60 text-sm leading-relaxed font-medium">Il contenuto che hai pubblicato non era conforme alle regole della nostra community.</p>
+            </div>
+            <div className="bg-rose-500/5 border border-rose-500/20 rounded-2xl p-5 text-left">
+              <p className="text-rose-400 text-[10px] uppercase font-black tracking-widest mb-1 items-center flex gap-1.5">
+                <AlertTriangle className="w-3 h-3" /> Info Moderazione
+              </p>
+              <p className="text-white text-sm font-bold leading-relaxed">Il post è stato rimosso per violazione dei contenuti. Assicurati di seguire le linee guida per i prossimi post.</p>
+            </div>
+            <button 
+              onClick={handleClearPostNotice} 
+              className="w-full py-4 bg-rose-600 text-white font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-rose-900/40 active:scale-95 transition-all"
+            >Ho letto</button>
+          </>
         ) : null}
       </div>
     </motion.div>
@@ -10634,7 +10721,7 @@ export default function App() {
           if (u?.id) {
             // Use maybeSingle to avoid error on 0 rows
             const { data, error } = await supabase.from('users')
-              .select('id, is_online, is_blocked, is_suspended, doc_rejected, doc_rejected_at, last_warning_reason, suspension_reason')
+              .select('id, is_online, is_blocked, is_suspended, doc_rejected, doc_rejected_at, last_warning_reason, suspension_reason, has_post_removal_notice')
               .eq('id', u.id)
               .maybeSingle();
 
@@ -10668,16 +10755,20 @@ export default function App() {
                 setSecurityStatus({ type: 'blocked' });
               } else if (data.is_suspended) {
                 setSecurityStatus({ type: 'suspended', reason: data.suspension_reason });
+              } else if (data.has_post_removal_notice) {
+                setSecurityStatus({ type: 'post_removed' });
               } else if (data.doc_rejected) {
                 setSecurityStatus({ type: 'doc_rejected', rejectedAt: data.doc_rejected_at });
               } else if (data.last_warning_reason) {
-                // If warning is new, we might want to show it once
-                // For now, let's just use it if the user is active
                 const warned = localStorage.getItem('soulmatch_warned_id');
                 if (warned !== data.last_warning_reason) {
                   setSecurityStatus({ type: 'warning', reason: data.last_warning_reason });
                   localStorage.setItem('soulmatch_warned_id', data.last_warning_reason);
+                } else {
+                  setSecurityStatus({ type: null });
                 }
+              } else {
+                setSecurityStatus({ type: null });
               }
 
               // Update status
