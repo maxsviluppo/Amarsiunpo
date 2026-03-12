@@ -732,7 +732,7 @@ const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 
       initial={{ opacity: 0, y: 50, x: '-50%' }}
       animate={{ opacity: 1, y: 0, x: '-50%' }}
       exit={{ opacity: 0, y: 20, x: '-50%' }}
-      className="fixed bottom-[200px] left-1/2 z-[100] px-5 py-3 rounded-2xl flex items-center gap-3 min-w-[260px]"
+      className="fixed bottom-[200px] left-1/2 z-[100] px-5 py-3 rounded-2xl flex items-center gap-3 min-w-[260px] pointer-events-auto"
       style={{ background: 'rgba(10,10,15,0.92)', border: '1px solid rgba(255,255,255,0.1)', backdropFilter: 'blur(24px)', boxShadow: '0 8px 40px rgba(0,0,0,0.6)' }}
     >
       <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0"
@@ -756,7 +756,7 @@ export const PremiumModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: ()
   if (!isOpen) return null;
 
   const features = [
-    { name: "SoulLink giornalieri", free: "3", premium: "Illimitati" },
+    { name: "SoulLink giornalieri", free: "2", premium: "Illimitati" },
     { name: "Messaggi Flash", free: "No", premium: "Sì" },
     { name: "Vedi chi ti ha cercato", free: "Sfocato", premium: "Chiaro" },
     { name: "Badge Speciale", free: "Base", premium: "Premium" },
@@ -764,7 +764,7 @@ export const PremiumModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: ()
   ];
 
   return (
-    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 pointer-events-auto">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={onClose} />
       <motion.div
         initial={{ opacity: 0, scale: 0.9, y: 20 }}
@@ -2137,7 +2137,7 @@ const ProfileDetailPage = () => {
         .eq('sender_id', currentUser.id)
         .gte('created_at', today.toISOString());
 
-      if ((count || 0) >= 5) {
+      if ((count || 0) >= 2) {
         setShowPremiumModal(true);
         return;
       }
