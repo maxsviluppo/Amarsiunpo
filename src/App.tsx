@@ -3233,16 +3233,18 @@ const BachecaPage = () => {
 
         <div className="px-4 pt-4 pb-2">
           <div className="flex items-center gap-2 mb-3">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-            </span>
-            <span className="text-white/50 text-[10px] font-black uppercase tracking-[0.2em]">Online ora</span>
+            <Sparkles className="w-3 h-3 text-amber-500" />
+            <span className="text-white/50 text-[10px] font-black uppercase tracking-[0.2em]">Utenti Suggeriti</span>
           </div>
           <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
-            {heroProfiles.map((p, i) => (
+            {[...filteredProfiles].sort((a, b) => (b.is_online ? 1 : 0) - (a.is_online ? 1 : 0)).map((p, i) => (
               <Link key={p.id} to={`/profile-detail/${p.id}`} className="flex flex-col items-center gap-1.5 shrink-0">
-                <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-rose-500 p-0.5 bg-gradient-to-br from-rose-500 to-purple-600 shadow-lg shadow-rose-500/30">
+                <div className={cn(
+                  "w-16 h-16 rounded-full overflow-hidden border-2 p-0.5 shadow-lg transition-all duration-500",
+                  p.is_online 
+                    ? "border-emerald-500 bg-emerald-500 shadow-emerald-500/30" 
+                    : "border-rose-600 bg-rose-600 shadow-rose-900/30"
+                )}>
                   <img src={p.photos?.[0] || p.photo_url || `https://picsum.photos/seed/${p.name}/200`} className="w-full h-full object-cover rounded-full" />
                 </div>
                 <span className="text-white text-[11px] font-bold truncate w-16 text-center">{p.name}</span>
