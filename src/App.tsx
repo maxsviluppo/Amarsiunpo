@@ -93,6 +93,9 @@ const normalizeUser = (u: any): any => {
 
   return {
     ...u,
+    is_paid: u?.is_paid === 1 || u?.is_paid === true,
+    subscription_type: u?.subscription_type,
+    subscription_expiry: u?.subscription_expiry,
     orientation: parseArrField(u?.orientation),
     looking_for_gender: parseArrField(u?.looking_for_gender),
     photos: parseArrField(u?.photos).filter(p => typeof p === 'string' && p.trim().length > 0),
@@ -754,6 +757,15 @@ export const PremiumModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: ()
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'annual'>('annual');
   
   if (!isOpen) return null;
+  
+  const STRIPE_MONTHLY_LINK = 'https://buy.stripe.com/eVqeVd6KT2sweMA10w7IY06';
+  const STRIPE_ANNUAL_LINK = 'https://buy.stripe.com/eVqeVd6KT2sweMA10w7IY06'; // Utilizziamo lo stesso link di test per ora
+
+  const handleCheckout = () => {
+    localStorage.setItem('soulmatch_pending_plan', selectedPlan);
+    const link = selectedPlan === 'monthly' ? STRIPE_MONTHLY_LINK : STRIPE_ANNUAL_LINK;
+    window.location.href = link;
+  };
 
   const features = [
     { name: "SoulLink giornalieri", free: "2", premium: "Illimitati" },
@@ -841,8 +853,8 @@ export const PremiumModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: ()
                 </button>
 
                 <button 
-                  disabled
-                  className="w-full py-4 bg-purple-600 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-lg shadow-purple-900/40 opacity-50 cursor-not-allowed flex items-center justify-center gap-2"
+                  onClick={handleCheckout}
+                  className="w-full py-4 bg-purple-600 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-lg shadow-purple-900/40 hover:bg-purple-500 transition-all flex items-center justify-center gap-2"
                 >
                   <CreditCard className="w-4 h-4" /> Procedi all'abbonamento
                 </button>
@@ -882,8 +894,8 @@ export const PremiumModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: ()
 
               <div className="flex flex-col gap-3 pt-2">
                 <button 
-                  disabled
-                  className="w-full py-4 bg-purple-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-purple-900/40 opacity-50 flex items-center justify-center gap-2"
+                  onClick={handleCheckout}
+                  className="w-full py-4 bg-purple-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-purple-900/40 hover:bg-purple-500 transition-all flex items-center justify-center gap-2"
                 >
                   Sottoscrivi ora
                 </button>
@@ -1243,7 +1255,9 @@ const HomeSlider = () => {
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data) && data.length > 0) {
-          setImages(data);
+          // Shuffle images for a random sequence every visit
+          const shuffled = [...data].sort(() => Math.random() - 0.5);
+          setImages(shuffled);
         }
       })
       .catch(() => { });
@@ -3018,7 +3032,10 @@ const BachecaPage = () => {
 
 
   const [heroIndex, setHeroIndex] = useState(0);
-  const heroProfiles = useMemo(() => filteredProfiles.slice(0, 5), [filteredProfiles]);
+  const heroProfiles = useMemo(() => {
+    // Shuffle the entire filtered list and take first 5
+    return [...filteredProfiles].sort(() => Math.random() - 0.5).slice(0, 5);
+  }, [filteredProfiles]);
 
   // Reset index if profiles change to prevent out of bounds
   useEffect(() => {
@@ -8348,6 +8365,40 @@ const EditProfilePage = () => {
 
         {/* Form Sections */}
         <div className="space-y-12">
+          {/* Section: Abbonamento (Moved to top as requested) */}
+          {user.is_paid && (
+            <section className="space-y-6 animate-in fade-in slide-in-from-top-4 duration-700">
+              <div className="flex items-center gap-3 px-1">
+                <div className="w-1 h-6 bg-purple-600 rounded-full" />
+                <h2 className="text-sm font-black uppercase tracking-widest text-stone-900">Il Mio Abbonamento</h2>
+              </div>
+              <div className="p-6 bg-gradient-to-br from-purple-500/10 to-indigo-500/5 rounded-[32px] border border-purple-200/50 shadow-sm relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-purple-600/5 rounded-full blur-2xl -mr-8 -mt-8" />
+                <div className="flex items-center justify-between mb-4 relative z-10">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
+                      <Zap className="w-5 h-5 text-purple-600" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-stone-400">Piano Attivo</p>
+                      <p className="text-sm font-black text-stone-900 uppercase flex items-center gap-2">
+                        SoulMatch {user.subscription_type || 'Premium'}
+                        {user.subscription_expiry && (
+                          <span className="px-2 py-0.5 bg-purple-600 text-[8px] text-white rounded-full animate-in fade-in zoom-in duration-500">
+                            Scad: {new Date(user.subscription_expiry).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="px-3 py-1 bg-emerald-100 text-emerald-700 text-[9px] font-black uppercase tracking-widest rounded-full">
+                    Attivo
+                  </div>
+                </div>
+              </div>
+            </section>
+          )}
+
           {/* Section: Anagrafica (Locked) */}
           <section className="space-y-6">
             <div className="flex items-center gap-3 px-1">
@@ -9880,7 +9931,16 @@ const ProfilePage = () => {
               user.is_paid ? "bg-rose-600 text-white" : "bg-white/15 backdrop-blur text-white/60 border border-white/20"
             )}>
               <div className={cn("w-1.5 h-1.5 rounded-full", user.is_paid ? "bg-white animate-pulse" : "bg-white/30")} />
-              {user.is_paid ? 'Premium' : 'Base'}
+              {user.is_paid ? (
+                <span className="flex items-center gap-1">
+                  Premium
+                  {user.subscription_expiry && (
+                    <span className="opacity-60 font-medium text-[8px]">
+                      • Scad. {new Date(user.subscription_expiry).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })}
+                    </span>
+                  )}
+                </span>
+              ) : 'Base'}
             </div>
           </div>
         </div>
@@ -10829,6 +10889,125 @@ const SharedRejectedDocumentBanner = ({ currentUser, onUploadSuccess }: { curren
   );
 };
 
+const SubscriptionSuccessPage = () => {
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [expiry, setExpiry] = useState<string>('');
+
+  useEffect(() => {
+    const processSubscription = async () => {
+      const saved = localStorage.getItem('soulmatch_user');
+      if (saved) {
+        try {
+          const u = JSON.parse(saved);
+          const pendingPlan = localStorage.getItem('soulmatch_pending_plan') as 'monthly' | 'annual' || 'monthly';
+          
+          const expiryDate = new Date();
+          if (pendingPlan === 'annual') {
+            expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+          } else {
+            expiryDate.setMonth(expiryDate.getMonth() + 1);
+          }
+
+          const subscriptionData = {
+            is_paid: true,
+            subscription_type: pendingPlan === 'annual' ? 'annuale' : 'mensile',
+            subscription_expiry: expiryDate.toISOString()
+          };
+          
+          setExpiry(expiryDate.toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' }));
+
+          // 1. Update Database
+          const { error } = await supabase
+            .from('users')
+            .update(subscriptionData)
+            .eq('id', u.id);
+          
+          if (!error) {
+            // 2. Update Local Session
+            const updatedUser = { ...u, ...subscriptionData };
+            localStorage.setItem('soulmatch_user', JSON.stringify(updatedUser));
+            localStorage.removeItem('soulmatch_pending_plan');
+            window.dispatchEvent(new Event('user-auth-change'));
+          }
+        } catch (e) {
+          console.error("Errore processamento abbonamento:", e);
+        }
+      }
+      setLoading(false);
+    };
+
+    processSubscription();
+  }, []);
+
+  return (
+    <div className="min-h-screen pt-24 pb-12 px-6 flex flex-col items-center justify-center bg-[#0a0a0f] relative overflow-hidden">
+      {/* Animated background stars/pixels */}
+      <div className="absolute inset-0 z-0 opacity-20 pointer-events-none">
+        <div className="absolute top-1/4 left-1/4 w-1 h-1 bg-white rounded-full animate-ping" />
+        <div className="absolute top-3/4 left-2/3 w-1 h-1 bg-white rounded-full animate-ping [animation-delay:1s]" />
+        <div className="absolute top-1/2 left-1/2 w-80 h-80 bg-purple-600/20 blur-[120px] rounded-full -translate-x-1/2 -translate-y-1/2" />
+      </div>
+
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.9, y: 30 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        className="w-full max-w-md bg-stone-900/40 backdrop-blur-2xl border border-white/10 rounded-[40px] p-8 text-center relative z-10 shadow-2xl"
+      >
+        <div className="w-20 h-20 bg-emerald-500/20 rounded-[28px] flex items-center justify-center mx-auto mb-6 border border-emerald-500/30 relative">
+          <div className="absolute inset-0 bg-emerald-500/20 blur-xl rounded-full animate-pulse" />
+          <CheckCircle className="w-10 h-10 text-emerald-500 relative z-10" />
+        </div>
+
+        <h1 className="text-3xl font-serif font-black text-white mb-2 leading-tight">Benvenuto nel <br /><span className="text-purple-400">Club Premium!</span></h1>
+        <p className="text-stone-400 text-sm font-bold uppercase tracking-widest mb-8">Pagamento completato con successo</p>
+
+        <div className="space-y-4 mb-10">
+          {[
+            { icon: Sparkles, label: "SoulLink Illimitati", desc: "Niente più limiti giornalieri" },
+            { icon: Zap, label: "Messaggi Flash", desc: "Contatta chiunque istantaneamente" },
+            { icon: Eye, label: "Identità Svelata", desc: "Vedi chiaramente chi ti cerca" },
+            { icon: ShieldCheck, label: "Badge Premium", desc: "Massima affidabilità sul profilo" }
+          ].map((feat, i) => (
+            <motion.div 
+              key={i}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.3 + (i * 0.1) }}
+              className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/5"
+            >
+              <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center border border-purple-500/20">
+                <feat.icon className="w-5 h-5 text-purple-400" />
+              </div>
+              <div className="text-left">
+                <p className="text-xs font-black text-white uppercase tracking-wider">{feat.label}</p>
+                <p className="text-[10px] text-stone-500 font-bold">{feat.desc}</p>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+
+        <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/10 mb-8">
+           <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">Stato Abbonamento</p>
+           <p className="text-sm font-bold text-white">Attivo fino al {expiry || '...'}</p>
+        </div>
+
+        <button 
+          onClick={() => navigate('/bacheca')}
+          className="w-full py-4 bg-white text-black rounded-2xl text-[11px] font-black uppercase tracking-widest hover:bg-stone-200 transition-all active:scale-95 shadow-xl shadow-white/5"
+        >
+          Vai alla Bacheca e inizia ora
+        </button>
+      </motion.div>
+
+      <div className="mt-8 text-center text-[10px] text-stone-600 font-bold uppercase tracking-widest">
+        SoulMatch Premium • Ordine #SM-{Math.floor(Math.random() * 100000)}
+      </div>
+    </div>
+  );
+};
+
+
 const SecurityWarningSideBanner = () => {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -11076,8 +11255,83 @@ const SecurityOverlay = ({ status, onClose }: { status: any; onClose: () => void
   );
 };
 
+const SubscriptionExpiryBanner = ({ user, onRenew }: { user: UserProfile, onRenew: () => void }) => {
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    if (user.is_paid && user.subscription_expiry) {
+      const expiry = new Date(user.subscription_expiry);
+      const now = new Date();
+      const diffTime = expiry.getTime() - now.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      // Mostra se mancano 3 giorni o meno e non è già scaduto
+      if (diffDays > 0 && diffDays <= 3) {
+        const sessionKey = `sm_expiry_shown_${user.id}`;
+        const sessionShown = sessionStorage.getItem(sessionKey);
+        if (!sessionShown) {
+          setShow(true);
+        }
+      }
+    }
+  }, [user]);
+
+  if (!show) return null;
+
+  return (
+    <AnimatePresence>
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.9, y: 20 }} 
+        animate={{ opacity: 1, scale: 1, y: 0 }} 
+        exit={{ opacity: 0, scale: 0.9, y: 20 }}
+        className="fixed inset-x-6 bottom-24 z-[9999] bg-stone-900 border border-purple-500/40 rounded-[32px] p-6 shadow-2xl overflow-hidden"
+      >
+        <div className="absolute top-0 right-0 w-32 h-32 bg-purple-600/10 rounded-full blur-3xl -mr-12 -mt-12" />
+        <div className="flex items-center gap-4 mb-4 relative z-10">
+          <div className="w-12 h-12 bg-purple-600/20 rounded-2xl flex items-center justify-center border border-purple-500/30">
+            <Bell className="w-6 h-6 text-purple-400 animate-bounce" />
+          </div>
+          <div>
+            <h3 className="text-[13px] font-black text-white uppercase tracking-widest leading-none">Abbonamento in Scadenza</h3>
+            <p className="text-[10px] text-purple-400 font-bold uppercase tracking-tighter mt-1">Mancano meno di 3 giorni!</p>
+          </div>
+        </div>
+        
+        <p className="text-[11px] text-white/50 leading-relaxed font-bold mb-6 relative z-10">
+          Il tuo piano Premium sta per terminare. Rinnova ora per non perdere i vantaggi sbloccati e continuare la tua esperienza su SoulMatch senza interruzioni.
+        </p>
+
+        <div className="flex gap-3 relative z-10">
+          <button 
+            onClick={() => { setShow(false); onRenew(); sessionStorage.setItem(`sm_expiry_shown_${user.id}`, 'true'); }}
+            className="flex-1 py-4 bg-purple-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-purple-900/40 active:scale-95 transition-all"
+          >
+            Rinnova Ora
+          </button>
+          <button 
+            onClick={() => { setShow(false); sessionStorage.setItem(`sm_expiry_shown_${user.id}`, 'true'); }}
+            className="flex-1 py-4 bg-white/5 text-white/40 border border-white/5 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all font-bold"
+          >
+            Chiudi
+          </button>
+        </div>
+      </motion.div>
+    </AnimatePresence>
+  );
+};
+
 export default function App() {
   const [securityStatus, setSecurityStatus] = useState<any>({ type: null });
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [isPremiumOpen, setIsPremiumOpen] = useState(false);
+
+  const handleGlobalClick = (e: MouseEvent) => {
+    const target = e.target as HTMLElement;
+    const interactive = target.closest('button, a, [role="button"]');
+    if (interactive) {
+      // playTapSound();
+    }
+  };
 
   useEffect(() => {
     // Check if security status is saved in localStorage (e.g. for doc rejection persistence)
@@ -11101,7 +11355,7 @@ export default function App() {
           if (u?.id) {
             // Use maybeSingle to avoid error on 0 rows
             const { data, error } = await supabase.from('users')
-              .select('id, email, is_online, is_blocked, is_suspended, doc_rejected, doc_rejected_at, last_warning_reason, suspension_reason, has_post_removal_notice')
+              .select('id, email, is_online, is_blocked, is_suspended, doc_rejected, doc_rejected_at, last_warning_reason, suspension_reason, has_post_removal_notice, is_paid, subscription_type, subscription_expiry')
               .eq('id', u.id)
               .maybeSingle();
 
@@ -11115,21 +11369,6 @@ export default function App() {
               localStorage.removeItem('soulmatch_user');
               window.dispatchEvent(new Event('user-auth-change'));
             } else {
-              // TEMPORARY: Auto-reactivate test user if it's currently restricted
-              if (data.email?.toLowerCase().includes('test') && (data.is_blocked || data.is_suspended || data.doc_rejected)) {
-                console.log("Auto-reactivating test user:", data.email);
-                await supabase.from('users').update({ 
-                  is_blocked: false, 
-                  is_suspended: false, 
-                  doc_rejected: false,
-                  doc_rejected_at: null 
-                }).eq('id', data.id);
-                // Refresh local data state
-                data.is_blocked = false;
-                data.is_suspended = false;
-                data.doc_rejected = false;
-              }
-
               // Check security status
               if (data.is_blocked) {
                 setSecurityStatus({ type: 'blocked' });
@@ -11151,13 +11390,18 @@ export default function App() {
                 setSecurityStatus({ type: null });
               }
 
-              // Update status
+              // Update status and storage if changed
+              const updatedUser = normalizeUser({ ...u, ...data });
+              setCurrentUser(updatedUser);
+              localStorage.setItem('soulmatch_user', JSON.stringify(updatedUser));
               await supabase.from('users').update({ is_online: true }).eq('id', u.id);
             }
           }
         } catch (e) {
           console.error("Errore verifica sessione (Local):", e);
         }
+      } else {
+        setCurrentUser(null);
       }
     };
     verifyUser();
@@ -11198,8 +11442,6 @@ export default function App() {
         try {
           const u = JSON.parse(saved);
           if (u?.id) {
-            // navigator.sendBeacon could be used here for more reliability if we had an endpoint
-            // but for now we try a quick update
             supabase.from('users').update({ is_online: false }).eq('id', u.id).then();
           }
         } catch (e) { }
@@ -11207,13 +11449,16 @@ export default function App() {
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
 
-    const handleGlobalClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      const interactive = target.closest('button, a, [role="button"]');
-      if (interactive) {
-        // playTapSound();
+    const handleAuthChange = () => {
+      const saved = localStorage.getItem('soulmatch_user');
+      if (saved) {
+        try { setCurrentUser(normalizeUser(JSON.parse(saved))); } catch { setCurrentUser(null); }
+      } else {
+        setCurrentUser(null);
       }
     };
+    window.addEventListener('user-auth-change', handleAuthChange);
+    window.addEventListener('storage', handleAuthChange);
 
     window.addEventListener('mousedown', handleGlobalClick);
     return () => {
@@ -11221,6 +11466,8 @@ export default function App() {
       window.removeEventListener('mousedown', handleGlobalClick);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('user-auth-change', handleAuthChange);
+      window.removeEventListener('storage', handleAuthChange);
     };
   }, []);
 
@@ -11314,9 +11561,14 @@ export default function App() {
         <Route path="/segnalazioni" element={<SegnalazioniPage />} />
         <Route path="/faq" element={<FaqPage />} />
         <Route path="/dmca" element={<DmcaPage />} />
+        <Route path="/subscription-success" element={<SubscriptionSuccessPage />} />
       </Routes>
       <GlobalFlashBanner />
       <AppBottomNav />
+      {currentUser && (
+        <SubscriptionExpiryBanner user={currentUser} onRenew={() => setIsPremiumOpen(true)} />
+      )}
+      <PremiumModal isOpen={isPremiumOpen} onClose={() => setIsPremiumOpen(false)} />
       <SecurityWarningSideBanner />
       <SecurityOverlay status={securityStatus} onClose={handleCloseSecurity} />
     </Router>

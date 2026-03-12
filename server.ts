@@ -54,7 +54,9 @@ const migrateColumns = () => {
     { name: 'looking_for_other', type: 'TEXT' },
     { name: 'is_blocked', type: 'INTEGER DEFAULT 0' },
     { name: 'is_suspended', type: 'INTEGER DEFAULT 0' },
-    { name: 'is_validated', type: 'INTEGER DEFAULT 0' }
+    { name: 'is_validated', type: 'INTEGER DEFAULT 0' },
+    { name: 'subscription_type', type: 'TEXT' },
+    { name: 'subscription_expiry', type: 'TEXT' }
   ];
 
   for (const col of columns) {

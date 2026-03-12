@@ -43,6 +43,8 @@ export interface UserProfile {
   accepted_terms?: boolean;
   accepted_privacy?: boolean;
   doc_rejected_at?: string | null;
+  subscription_type?: 'mensile' | 'annuale';
+  subscription_expiry?: string;
 }
 
 export interface ChatRequest {
