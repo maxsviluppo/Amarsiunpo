@@ -79,6 +79,9 @@ export function calculateMatchScore(u1: any, u2: any): number {
     score = 45 + hash;
   }
 
+  // Final bonus to increase "feeling" as requested (+5%)
+  score += 5;
+
   // Cap score
   return Math.min(Math.max(score, 10), 99);
 }

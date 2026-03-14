@@ -2020,6 +2020,8 @@ const ProfileDetailPage = () => {
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' | 'info' } | null>(null);
   const [soulLinkStatus, setSoulLinkStatus] = useState<'none' | 'pending_sent' | 'pending_received' | 'accepted' | 'rejected'>('none');
   const [soulLinkId, setSoulLinkId] = useState<string | null>(null);
+  const [hasMatched, setHasMatched] = useState(false);
+  const [matchScoreShared, setMatchScoreShared] = useState<number | null>(null);
   const [heroIndex, setHeroIndex] = useState(0);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [reportReason, setReportReason] = useState('');
@@ -2042,10 +2044,17 @@ const ProfileDetailPage = () => {
   const fetchInteractionState = async (currentUserId: string) => {
     const { data } = await supabase
       .from('interactions')
-      .select('type')
+      .select('type, metadata')
       .eq('from_user_id', currentUserId)
       .eq('to_user_id', id);
-    if (data) setUserInteractions(data.map(i => i.type));
+    if (data) {
+      setUserInteractions(data.map(i => i.type));
+      const heartMatch = data.find(i => i.type === 'heart' && i.metadata?.match_score);
+      if (heartMatch) {
+        setHasMatched(true);
+        setMatchScoreShared(heartMatch.metadata.match_score);
+      }
+    }
   };
 
   const handleReportUser = async () => {
@@ -2163,6 +2172,20 @@ const ProfileDetailPage = () => {
             } else {
               setSoulLinkStatus('rejected');
             }
+
+            // Also check if the OTHER user sent a match heart to us
+            const { data: incomingHeart } = await supabase
+              .from('interactions')
+              .select('metadata')
+              .eq('from_user_id', id)
+              .eq('to_user_id', currentUserId)
+              .eq('type', 'heart')
+              .maybeSingle();
+            
+            if (incomingHeart?.metadata?.match_score) {
+              setHasMatched(true);
+              setMatchScoreShared(incomingHeart.metadata.match_score);
+            }
           } else {
             setSoulLinkStatus('none');
             setSoulLinkId(null);
@@ -2214,13 +2237,37 @@ const ProfileDetailPage = () => {
   };
 
   const handleAcceptSoulLink = async () => {
-    if (!soulLinkId) return;
+    if (!soulLinkId || !currentUser?.id) return;
+
+    if (!currentUser.is_paid) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const { count } = await supabase
+        .from('interactions')
+        .select('*', { count: 'exact', head: true })
+        .eq('from_user_id', currentUser.id)
+        .eq('type', 'soul_link_accept')
+        .gte('created_at', today.toISOString());
+
+      if ((count || 0) >= 2) {
+        setShowPremiumModal(true);
+        return;
+      }
+    }
+
     const { error } = await supabase
       .from('soul_links')
       .update({ status: 'accepted' })
       .eq('id', soulLinkId);
 
     if (!error) {
+      // Record the acceptance interaction to track daily limit
+      await supabase.from('interactions').insert([{
+        from_user_id: currentUser.id,
+        to_user_id: profile?.id,
+        type: 'soul_link_accept'
+      }]);
+
       setSoulLinkStatus('accepted');
       setToast({ message: '🎉 Ora siete amici!', type: 'success' });
     }
@@ -2463,8 +2510,8 @@ const ProfileDetailPage = () => {
       </div>
 
       <div className="relative z-10 -mt-20 px-5 pb-10">
-        {/* Spacing to lower the name block as requested - Adjusted higher by 80px (280 -> 200) */}
-        <div className="h-[200px]" />
+        {/* Spacing to lower the name block as requested - Adjusted higher by 30px (150 -> 120) */}
+        <div className="h-[120px]" />
 
         {/* Name / age / city block & Match Widget - Compact margin mb-2 */}
         <div className="flex items-start justify-between gap-3 mb-2">
@@ -2487,8 +2534,8 @@ const ProfileDetailPage = () => {
             )}
           </div>
 
-          {/* Match Widget Next to Name - Even larger (0.88) and with neon stars effect */}
-          {currentUser && soulLinkStatus === 'accepted' && matchScore > 0 && (
+          {/* Match Widget Next to Name - Shown only after executing SoulMatch (hasMatched) */}
+          {currentUser && hasMatched && (matchScoreShared || matchScore) > 0 && (
              <div className="shrink-0 -mt-17 scale-[0.88] origin-top-right">
                 <div className="relative w-32 h-32 flex items-center justify-center">
                   <style>{`
@@ -2920,6 +2967,7 @@ const BachecaPage = () => {
   const [showSearch, setShowSearch] = useState(false);
   const [unlockedIds, setUnlockedIds] = useState<string[]>([]);
   const [friends, setFriends] = useState<string[]>([]);
+  const [sharedMatches, setSharedMatches] = useState<Record<string, number>>({});
 
   const fetchFriends = async (userId: string) => {
     const { data } = await supabase
@@ -2930,6 +2978,27 @@ const BachecaPage = () => {
     if (data) {
       setFriends(data.map(sl => sl.sender_id === userId ? sl.receiver_id : sl.sender_id));
     }
+  };
+
+  const fetchSharedMatches = async (userId: string) => {
+    try {
+      const { data } = await supabase
+        .from('interactions')
+        .select('from_user_id, to_user_id, metadata')
+        .eq('type', 'heart')
+        .or(`from_user_id.eq.${userId},to_user_id.eq.${userId}`);
+
+      if (data) {
+        const map: Record<string, number> = {};
+        data.forEach(i => {
+          if (i.metadata?.match_score) {
+            const otherId = i.from_user_id === userId ? i.to_user_id : i.from_user_id;
+            map[otherId] = i.metadata.match_score;
+          }
+        });
+        setSharedMatches(map);
+      }
+    } catch (e) { }
   };
 
   useEffect(() => {
@@ -2947,10 +3016,10 @@ const BachecaPage = () => {
         if (realUser) {
           const norm = normalizeUser(realUser);
           setCurrentUser(norm);
-          await fetchFriends(norm.id);
+          await Promise.all([fetchFriends(norm.id), fetchSharedMatches(norm.id)]);
         } else {
           setCurrentUser(normalizeUser(u));
-          await fetchFriends(u.id);
+          await Promise.all([fetchFriends(u.id), fetchSharedMatches(u.id)]);
         }
       }
     };
@@ -3556,14 +3625,14 @@ const BachecaPage = () => {
                       </div>
                     )}
 
-                    {/* Match Score Badge - ONLY IF FRIENDS */}
-                    {currentUser && unlockedIds.includes(profile.id) && friends.includes(profile.id) && calculateMatchScore(currentUser, profile) > 0 && (
+                    {/* Match Score Badge - ONLY IF FRIENDS and MATCHED/UNLOCKED */}
+                    {currentUser && (unlockedIds.includes(profile.id) || sharedMatches[profile.id]) && friends.includes(profile.id) && (sharedMatches[profile.id] || calculateMatchScore(currentUser, profile)) > 0 && (
                       <div className="absolute top-0 left-0 z-20 pointer-events-none overflow-hidden rounded-tl-[22px]">
                         <svg width="80" height="80" viewBox="0 0 100 100" fill="none" className="w-[70px] h-[70px]">
                           <path d="M 0 0 L 100 0 Q 15 15 0 100 Z" fill="#e11d48" />
                         </svg>
                         <div className="absolute top-3 left-3">
-                          <span className="text-[18px] font-black text-white leading-none drop-shadow">{calculateMatchScore(currentUser, profile)}%</span>
+                          <span className="text-[18px] font-black text-white leading-none drop-shadow">{sharedMatches[profile.id] || calculateMatchScore(currentUser, profile)}%</span>
                         </div>
                       </div>
                     )}
@@ -3805,6 +3874,7 @@ const SoulMatchPage = () => {
   // Top 10 Discovery State
   const [showRankings, setShowRankings] = useState(false);
   const [unlockedIds, setUnlockedIds] = useState<string[]>([]);
+  const [sharedMatches, setSharedMatches] = useState<Record<string, number>>({});
 
   const navigate = useNavigate();
 
@@ -3818,6 +3888,27 @@ const SoulMatchPage = () => {
     window.addEventListener('reset-soulmatch', handleReset);
     return () => window.removeEventListener('reset-soulmatch', handleReset);
   }, []);
+
+  const fetchSharedMatches = async (userId: string) => {
+    try {
+      const { data } = await supabase
+        .from('interactions')
+        .select('from_user_id, to_user_id, metadata')
+        .eq('type', 'heart')
+        .or(`from_user_id.eq.${userId},to_user_id.eq.${userId}`);
+
+      if (data) {
+        const map: Record<string, number> = {};
+        data.forEach(i => {
+          if (i.metadata?.match_score) {
+            const otherId = i.from_user_id === userId ? i.to_user_id : i.from_user_id;
+            map[otherId] = i.metadata.match_score;
+          }
+        });
+        setSharedMatches(map);
+      }
+    } catch (e) { }
+  };
 
   const unlockId = (id: string) => {
     const next = [...new Set([...unlockedIds, id])];
@@ -3874,11 +3965,11 @@ const SoulMatchPage = () => {
           if (realUser) {
             const norm = normalizeUser(realUser);
             setCurrentUser(norm);
-            await Promise.all([fetchGlobalProfiles(norm), fetchFriends(norm.id)]);
+            await Promise.all([fetchGlobalProfiles(norm), fetchFriends(norm.id), fetchSharedMatches(norm.id)]);
           } else {
             const norm = normalizeUser(u);
             setCurrentUser(norm);
-            await Promise.all([fetchGlobalProfiles(norm), fetchFriends(norm.id)]);
+            await Promise.all([fetchGlobalProfiles(norm), fetchFriends(norm.id), fetchSharedMatches(norm.id)]);
           }
         } else {
           navigate('/register');
@@ -4014,8 +4105,8 @@ const SoulMatchPage = () => {
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-stone-900/95 via-stone-900/10 to-transparent opacity-90 transition-opacity" />
 
-                  {/* Match Score Badge (Permanent) - ONLY IF UNLOCKED */}
-                  {currentUser && unlockedIds.includes(p.id) && calculateMatchScore(currentUser, p) > 0 && (
+                  {/* Match Score Badge (Permanent) - ONLY IF UNLOCKED or SHARED */}
+                  {currentUser && (unlockedIds.includes(p.id) || sharedMatches[p.id]) && (sharedMatches[p.id] || calculateMatchScore(currentUser, p)) > 0 && (
                     <div className="absolute top-0 left-0 z-20 pointer-events-none drop-shadow-[0_4px_10px_rgba(225,29,72,0.4)] overflow-hidden rounded-tl-[32px]">
                       <svg width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-[88px] h-[88px]">
                         <path d="M 0 0 L 100 0 Q 15 15 0 100 Z" fill="#e11d48" />
@@ -4023,7 +4114,7 @@ const SoulMatchPage = () => {
                       <div className="absolute top-4 left-4 flex flex-col items-center justify-center">
                         <Heart className="w-8 h-8 text-white/30 fill-current absolute -top-1 -left-1 rotate-[-15deg] scale-125" />
                         <span className="text-[24px] font-black text-white relative z-10 leading-none drop-shadow-md">
-                          {calculateMatchScore(currentUser, p)}%
+                          {sharedMatches[p.id] || calculateMatchScore(currentUser, p)}%
                         </span>
                       </div>
                     </div>
@@ -4210,12 +4301,23 @@ const SoulMatchPage = () => {
                   className="fixed right-32 z-[100] cursor-pointer"
                   onClick={async (e) => {
                     e.stopPropagation();
+                    // Save interaction
                     await supabase.from('interactions').insert({
                       from_user_id: currentUser?.id,
                       to_user_id: targetUser.id,
                       type: 'heart',
                       metadata: { match_score: matchScore, source: 'soulmatch_floating' }
                     });
+
+                    // Send Chat Message
+                    try {
+                      await supabase.from('room_messages').insert([{
+                        sender_id: currentUser?.id,
+                        receiver_id: targetUser.id,
+                        text: `✨ Ho eseguito un SoulMatch con te e abbiamo una compatibilità del ${matchScore}%! 💜`
+                      }]);
+                    } catch (err) { }
+
                     setFeelingSent(true);
                     alert(`✨ Soul Feeling inviato a ${targetUser.name}!`);
                   }}
@@ -4583,6 +4685,7 @@ const AmiciPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [acceptsCountToday, setAcceptsCountToday] = useState(0);
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
   const [readChatIds, setReadChatIds] = useState<Set<string>>(() => {
     try { const s = localStorage.getItem('sm_read_chats'); return s ? new Set(JSON.parse(s)) : new Set(); } catch { return new Set(); }
@@ -4661,6 +4764,18 @@ const AmiciPage = () => {
       setToast({ message: 'Errore di connessione.', type: 'error' });
     }
     setIsSendingQuickMsg(false);
+  };
+
+  const fetchAcceptsCount = async (userId: string) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const { count } = await supabase
+      .from('interactions')
+      .select('*', { count: 'exact', head: true })
+      .eq('from_user_id', userId)
+      .eq('type', 'soul_link_accept')
+      .gte('created_at', today.toISOString());
+    setAcceptsCountToday(count || 0);
   };
 
   const fetchSoulLinks = async (userId: string) => {
@@ -4742,9 +4857,10 @@ const AmiciPage = () => {
       if (saved) {
         const user = JSON.parse(saved);
         setCurrentUser(user);
-        fetchSoulLinks(user.id);
-        fetchAllLastMessages();
-      } else {
+    fetchSoulLinks(user.id);
+    fetchAcceptsCount(user.id);
+    fetchAllLastMessages();
+  } else {
         navigate('/register');
       }
     } catch (e) {
@@ -4757,6 +4873,9 @@ const AmiciPage = () => {
         .channel('soul-links-realtime')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'soul_links', filter: `receiver_id=eq.${currentUser.id}` }, () => fetchSoulLinks(currentUser.id))
         .on('postgres_changes', { event: '*', schema: 'public', table: 'soul_links', filter: `sender_id=eq.${currentUser.id}` }, () => fetchSoulLinks(currentUser.id))
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'interactions', filter: `from_user_id=eq.${currentUser.id}` }, (payload) => {
+           if (payload.new.type === 'soul_link_accept') fetchAcceptsCount(currentUser.id);
+        })
         .subscribe();
 
       const msgChannel = supabase
@@ -4791,15 +4910,32 @@ const AmiciPage = () => {
     }
   }, [currentUser?.id, navigate]);
 
-  const handleAccept = async (slId: string) => {
+  const handleAccept = async (slId: string, otherUserId: string) => {
+    if (!currentUser?.id) return;
+
+    if (!currentUser.is_paid) {
+      if (acceptsCountToday >= 2) {
+        setShowPremiumModal(true);
+        return;
+      }
+    }
+
     const { error } = await supabase
       .from('soul_links')
       .update({ status: 'accepted' })
       .eq('id', slId);
 
     if (!error) {
+      // Record the acceptance interaction to track daily limit
+      await supabase.from('interactions').insert([{
+        from_user_id: currentUser.id,
+        to_user_id: otherUserId,
+        type: 'soul_link_accept'
+      }]);
+
       setToast({ message: '🎉 Richiesta accettata! Siete ora amici.', type: 'success' });
-      if (currentUser?.id) fetchSoulLinks(currentUser.id);
+      fetchSoulLinks(currentUser.id);
+      fetchAcceptsCount(currentUser.id);
     }
   };
 
@@ -4958,7 +5094,7 @@ const AmiciPage = () => {
               <AnimatePresence mode="popLayout">
                 {pendingIn.map((req, i) => {
                   const isFree = !currentUser?.is_paid;
-                  const isUnderLimit = i < 2;
+                  const isUnderLimit = (acceptsCountToday + i) < 2;
                   const isLocked = isFree && !isUnderLimit;
                   return (
                   <motion.div
@@ -4967,9 +5103,15 @@ const AmiciPage = () => {
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, y: 20, scale: 0.9 }}
-                    className="rounded-[22px] p-3 flex items-center gap-3 cursor-pointer"
+                    className="rounded-[22px] p-3 flex items-center gap-3 cursor-pointer group active:scale-[0.98] transition-all"
                     style={{ background: 'rgba(244,63,94,0.08)', border: '1px solid rgba(244,63,94,0.15)' }}
-                    onClick={() => isLocked ? setShowPremiumModal(true) : null}
+                    onClick={() => {
+                      if (isLocked) {
+                        setShowPremiumModal(true);
+                      } else if (req.other_user?.id) {
+                        navigate(`/profile-detail/${req.other_user.id}`);
+                      }
+                    }}
                   >
                     <div className={cn("relative w-12 h-12 rounded-full shrink-0 overflow-hidden", isLocked && "blur-md opacity-80 backdrop-saturate-150")}>
                       <ProfileAvatar
@@ -4988,7 +5130,7 @@ const AmiciPage = () => {
                     </div>
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={(e) => { e.stopPropagation(); isLocked ? setShowPremiumModal(true) : handleAccept(req.id); }}
+                        onClick={(e) => { e.stopPropagation(); isLocked ? setShowPremiumModal(true) : handleAccept(req.id, req.other_user?.id || ''); }}
                         className={cn("w-10 h-10 text-white rounded-full flex items-center justify-center transition-all", isLocked ? "bg-rose-600/50 shadow-none border border-rose-500/50" : "bg-emerald-500 shadow-[0_0_16px_rgba(16,185,129,0.5)] active:scale-90")}
                       >
                         {isLocked ? <Lock className="w-4 h-4" /> : <CheckCircle className="w-5 h-5" />}
