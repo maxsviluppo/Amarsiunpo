@@ -1337,31 +1337,50 @@ const HomeSlider = () => {
 
   const displayImages = images.length > 0 ? images : fallbackImages;
 
+  const homeScrollRef = useRef<HTMLDivElement>(null);
+
+  const scrollToHome = (idx: number) => {
+    if (homeScrollRef.current) {
+      homeScrollRef.current.scrollTo({
+        left: idx * homeScrollRef.current.offsetWidth,
+        behavior: 'smooth'
+      });
+    }
+  };
+
   useEffect(() => {
     if (displayImages.length <= 1) return;
     const itv = setInterval(() => {
-      setIndex(prev => (prev + 1) % displayImages.length);
-    }, 4000); // Slightly faster for mobile engagement
+      const next = (index + 1) % displayImages.length;
+      setIndex(next);
+      scrollToHome(next);
+    }, 5000);
     return () => clearInterval(itv);
-  }, [displayImages.length]);
+  }, [displayImages.length, index]);
 
   return (
     <div className="absolute top-0 left-0 right-0 h-[650px] w-full overflow-hidden">
-      <AnimatePresence mode="wait">
-        <motion.img
-          key={index}
-          src={displayImages[index]}
-          initial={{ opacity: 0, scale: 1.1 }}
-          animate={{ opacity: 0.85, scale: 1 }}
-          exit={{ opacity: 0, scale: 1.05 }}
-          transition={{ duration: 1.8 }}
-          className="w-full h-full object-cover"
-        />
-      </AnimatePresence>
+      <div 
+        ref={homeScrollRef}
+        className="w-full h-full flex overflow-x-auto snap-x snap-mandatory scrollbar-hide scroll-smooth"
+        onScroll={(e) => {
+          const idx = Math.round(e.currentTarget.scrollLeft / e.currentTarget.offsetWidth);
+          if (idx !== index) setIndex(idx);
+        }}
+      >
+        {displayImages.map((img, i) => (
+          <div key={i} className="w-full h-full shrink-0 snap-center relative">
+            <img
+              src={img}
+              className="w-full h-full object-cover opacity-85"
+            />
+          </div>
+        ))}
+      </div>
       {/* Refined cinematic overlays - deeper focus in center */}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/90 via-transparent to-transparent" />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-transparent to-transparent" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_30%,rgba(0,0,0,0.4)_100%)]" />
+      <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-black/90 via-transparent to-transparent" />
+      <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-black/95 via-transparent to-transparent" />
+      <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_center,transparent_30%,rgba(0,0,0,0.4)_100%)]" />
     </div>
   );
 };
@@ -2104,6 +2123,16 @@ const ProfileDetailPage = () => {
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
   const navigate = useNavigate();
   const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const scrollToImage = (idx: number) => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({
+        left: idx * scrollRef.current.offsetWidth,
+        behavior: 'smooth'
+      });
+    }
+  };
 
 
   const fetchInteractionState = async (currentUserId: string) => {
@@ -2462,47 +2491,52 @@ const ProfileDetailPage = () => {
 
       {/* ── HERO PHOTO ── */}
       <div className="relative w-full h-[75vh] min-h-[500px] overflow-hidden" style={{ background: '#0a0a0f' }}>
-        <div className="w-full h-full relative" onClick={(e) => {
-          const rect = e.currentTarget.getBoundingClientRect();
-          const x = e.clientX - rect.left;
-          const photosCount = (profile.photos && profile.photos.length > 0) ? profile.photos.length : 1;
-          if (photosCount <= 1) return;
-          if (x < rect.width / 2) {
-            setHeroIndex(prev => (prev - 1 + photosCount) % photosCount);
-          } else {
-            setHeroIndex(prev => (prev + 1) % photosCount);
-          }
-        }}>
+        <div 
+          ref={scrollRef}
+          className="w-full h-full flex overflow-x-auto snap-x snap-mandatory scrollbar-hide scroll-smooth"
+          onScroll={(e) => {
+            const idx = Math.round(e.currentTarget.scrollLeft / e.currentTarget.offsetWidth);
+            if (idx !== heroIndex) setHeroIndex(idx);
+          }}
+        >
           {profile.photos && profile.photos.length > 0 ? (
-            <img
-              src={profile.photos[heroIndex]}
-              alt={profile.name}
-              className="w-full h-full object-cover transition-all duration-500"
-              referrerPolicy="no-referrer"
-            />
-          ) : (
-            <ProfileAvatar user={profile} className="w-full h-full" iconSize="w-32 h-32" />
-          )}
-
-          {/* Photo Indicators */}
-          {(profile.photos && profile.photos.length > 1) && (
-            <div className="absolute top-10 left-1/2 -translate-x-1/2 flex gap-1 z-30">
-              {profile.photos.map((_, idx) => (
-                <div
-                  key={idx}
-                  className={cn(
-                    "h-1 rounded-full transition-all duration-300",
-                    idx === heroIndex ? "w-6 bg-white/50" : "w-1.5 bg-white/15"
-                  )}
+            profile.photos.map((photo, pIdx) => (
+              <div key={pIdx} className="w-full h-full flex-shrink-0 snap-center relative">
+                <img
+                  src={photo}
+                  alt={`${profile.name} - ${pIdx + 1}`}
+                  className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
                 />
-              ))}
+              </div>
+            ))
+          ) : (
+            <div className="w-full h-full flex-shrink-0 snap-center relative">
+              <ProfileAvatar user={profile} className="w-full h-full" iconSize="w-32 h-32" />
             </div>
           )}
+        </div>
 
-          {/* CSS mask: photo fades naturally at bottom */}
-          <div className="absolute inset-0 pointer-events-none" style={{
-            background: 'linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, transparent 20%, transparent 70%, rgba(10,10,15,0.8) 90%, #0a0a0f 100%)'
-          }} />
+        {/* Photo Indicators */}
+        {(profile.photos && profile.photos.length > 1) && (
+          <div className="absolute top-10 left-1/2 -translate-x-1/2 flex gap-1 z-30">
+            {profile.photos.map((_, idx) => (
+              <button
+                key={idx}
+                onClick={() => scrollToImage(idx)}
+                className={cn(
+                  "h-1 rounded-full transition-all duration-300",
+                  idx === heroIndex ? "w-6 bg-white/50" : "w-1.5 bg-white/15"
+                )}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* CSS mask: photo fades naturally at bottom (Fixed above scrollable content) */}
+        <div className="absolute inset-0 pointer-events-none z-10" style={{
+          background: 'linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, transparent 20%, transparent 70%, rgba(10,10,15,0.8) 90%, #0a0a0f 100%)'
+        }} />
 
           {/* ── ONLINE / OFFLINE badge top-left ── */}
           <div className="absolute top-5 left-5 z-20">
@@ -2926,6 +2960,16 @@ const BachecaPage = () => {
   const [unlockedIds, setUnlockedIds] = useState<string[]>([]);
   const [friends, setFriends] = useState<string[]>([]);
   const [sharedMatches, setSharedMatches] = useState<Record<string, number>>({});
+  const bachecaScrollRef = useRef<HTMLDivElement>(null);
+
+  const scrollToHero = (idx: number) => {
+    if (bachecaScrollRef.current) {
+      bachecaScrollRef.current.scrollTo({
+        left: idx * bachecaScrollRef.current.offsetWidth,
+        behavior: 'smooth'
+      });
+    }
+  };
 
   const fetchFriends = async (userId: string) => {
     const { data } = await supabase
@@ -3256,10 +3300,12 @@ const BachecaPage = () => {
   useEffect(() => {
     if (heroProfiles.length < 2) return;
     const timer = setInterval(() => {
-      setHeroIndex(prev => (prev + 1) % heroProfiles.length);
+      const next = (heroIndex + 1) % heroProfiles.length;
+      setHeroIndex(next);
+      scrollToHero(next);
     }, 5000);
     return () => clearInterval(timer);
-  }, [heroProfiles.length]);
+  }, [heroProfiles.length, heroIndex]);
 
   const heroProfile = heroProfiles[heroIndex] || null;
 
@@ -3317,57 +3363,66 @@ const BachecaPage = () => {
       <SharedRejectedDocumentBanner currentUser={currentUser} />
 
       {/* ── HERO PHOTO SLIDER ── */}
-      {!loading && heroProfile && (
-
+      {!loading && heroProfiles.length > 0 && (
         <div className="relative w-full h-[85vh] min-h-[550px] overflow-hidden rounded-[40px]">
-          <AnimatePresence mode="sync">
-            <motion.img
-              key={heroProfile.id}
-              src={(heroProfile.photos?.[0]) || heroProfile.photo_url || `https://picsum.photos/seed/${heroProfile.name}/600/800`}
-              initial={{ opacity: 0, scale: 1.07 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 1.0, ease: 'easeOut' }}
-              className="absolute inset-0 w-full h-full object-cover object-top"
-            />
-          </AnimatePresence>
-          {/* Cinematic overlays - Cleared center for maximum depth/contrast */}
-          <div className="absolute inset-0" style={{
-            background: 'linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, transparent 20%, transparent 80%, rgba(10,10,15,0.9) 100%)'
-          }} />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_35%,rgba(0,0,0,0.6)_100%)] opacity-70" />
+          <div 
+            ref={bachecaScrollRef}
+            className="w-full h-full flex overflow-x-auto snap-x snap-mandatory scrollbar-hide scroll-smooth"
+            onScroll={(e) => {
+              const idx = Math.round(e.currentTarget.scrollLeft / e.currentTarget.offsetWidth);
+              if (idx !== heroIndex) setHeroIndex(idx);
+            }}
+          >
+            {heroProfiles.map((p, i) => (
+              <div key={p.id} className="w-full h-full shrink-0 snap-center relative">
+                <img
+                  src={(p.photos?.[0]) || p.photo_url || `https://picsum.photos/seed/${p.name}/600/800`}
+                  className="w-full h-full object-cover object-top"
+                />
+                {/* Cinematic overlays */}
+                <div className="absolute inset-0" style={{
+                  background: 'linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, transparent 20%, transparent 80%, rgba(10,10,15,0.9) 100%)'
+                }} />
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_35%,rgba(0,0,0,0.6)_100%)] opacity-70" />
 
-          {/* Info overlay — clickable to navigate to profile */}
-          <div
-            className="absolute inset-0 z-10 cursor-pointer"
-            onClick={() => navigate(`/profile-detail/${heroProfile.id}`)}
-          />
-          <div className="absolute bottom-0 left-0 right-0 px-5 pb-6 z-20 pointer-events-none">
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-white text-3xl font-montserrat font-black drop-shadow-xl">
-                  {heroProfile.name}
-                </span>
-                {calculateAge(heroProfile.dob) > 0 && (
-                  <span className="bg-white/10 backdrop-blur-xl text-white/80 px-3 py-1 rounded-xl text-xl font-black border border-white/10">
-                    {calculateAge(heroProfile.dob)}
-                  </span>
-                )}
-              </div>
-              {heroProfile.city && (
-                <div className="flex items-center gap-1.5 text-white/50 text-xs font-bold">
-                  <MapPin className="w-3 h-3 text-rose-500" />
-                  {heroProfile.city}
+                {/* Clickable area to navigate */}
+                <div
+                  className="absolute inset-0 z-10 cursor-pointer"
+                  onClick={() => navigate(`/profile-detail/${p.id}`)}
+                />
+
+                {/* Info block per slide */}
+                <div className="absolute bottom-0 left-0 right-0 px-5 pb-6 z-20 pointer-events-none">
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-white text-3xl font-montserrat font-black drop-shadow-xl">
+                        {p.name}
+                      </span>
+                      {calculateAge(p.dob) > 0 && (
+                        <span className="bg-white/10 backdrop-blur-xl text-white/80 px-3 py-1 rounded-xl text-xl font-black border border-white/10">
+                          {calculateAge(p.dob)}
+                        </span>
+                      )}
+                    </div>
+                    {p.city && (
+                      <div className="flex items-center gap-1.5 text-white/50 text-xs font-bold">
+                        <MapPin className="w-3 h-3 text-rose-500" />
+                        {p.city}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
+              </div>
+            ))}
           </div>
 
-          {/* Dot indicators */}
+          {/* Dot indicators fixed */}
           {heroProfiles.length > 1 && (
-            <div className="absolute top-4 right-5 flex gap-1.5 z-10">
+            <div className="absolute top-4 right-5 flex gap-1.5 z-30">
               {heroProfiles.map((_, i) => (
-                <button key={i} onClick={() => setHeroIndex(i)}
+                <button 
+                  key={i} 
+                  onClick={() => scrollToHero(i)}
                   className={cn('h-1 rounded-full transition-all duration-300', i === heroIndex ? 'bg-white w-6' : 'bg-white/25 w-1.5')}
                 />
               ))}
@@ -4378,6 +4433,16 @@ const FeedPage = () => {
   const [bannerMessages, setBannerMessages] = useState<any[]>([]);
   const [bannerIndex, setBannerIndex] = useState(0);
   const [heroIndex, setHeroIndex] = useState(0);
+  const feedScrollRef = useRef<HTMLDivElement>(null);
+
+  const scrollToFeedHero = (idx: number) => {
+    if (feedScrollRef.current) {
+      feedScrollRef.current.scrollTo({
+        left: idx * feedScrollRef.current.offsetWidth,
+        behavior: 'smooth'
+      });
+    }
+  };
 
   useEffect(() => {
     try {
@@ -4442,9 +4507,13 @@ const FeedPage = () => {
   }, [profiles, currentUser]);
   useEffect(() => {
     if (heroProfiles.length < 2) return;
-    const timer = setInterval(() => setHeroIndex(i => (i + 1) % heroProfiles.length), 4000);
+    const timer = setInterval(() => {
+      const next = (heroIndex + 1) % heroProfiles.length;
+      setHeroIndex(next);
+      scrollToFeedHero(next);
+    }, 4500);
     return () => clearInterval(timer);
-  }, [heroProfiles.length]);
+  }, [heroProfiles.length, heroIndex]);
 
   const heroProfile = heroProfiles[heroIndex];
 
@@ -4490,55 +4559,64 @@ const FeedPage = () => {
       {/* Document rejection handled by side banner */}
 
       {/* HERO SECTION - slide limited to 3 compatible profiles */}
-      {!loading && heroProfiles.length > 0 && heroProfile && (
+      {!loading && heroProfiles.length > 0 && (
         <div className="relative w-full h-[75vh] min-h-[550px] overflow-hidden">
-          <AnimatePresence mode="sync">
-            <motion.img
-              key={heroProfile.id}
-              src={(heroProfile.photos?.[0]) || heroProfile.photo_url || `https://picsum.photos/seed/${heroProfile.name}/600/800`}
-              initial={{ opacity: 0, scale: 1.07 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 1.0, ease: 'easeOut' }}
-              className="absolute inset-0 w-full h-full object-cover object-top"
-            />
-          </AnimatePresence>
-          {/* Cinematic fade - Cleared center for depth */}
-          <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, transparent 25%, transparent 75%, #0a0a0f 100%)' }} />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_35%,rgba(0,0,0,0.6)_100%)] opacity-60" />
+          <div 
+            ref={feedScrollRef}
+            className="w-full h-full flex overflow-x-auto snap-x snap-mandatory scrollbar-hide scroll-smooth"
+            onScroll={(e) => {
+              const idx = Math.round(e.currentTarget.scrollLeft / e.currentTarget.offsetWidth);
+              if (idx !== heroIndex) setHeroIndex(idx);
+            }}
+          >
+            {heroProfiles.map((p, i) => (
+              <div key={p.id} className="w-full h-full shrink-0 snap-center relative">
+                <img
+                  src={(p.photos?.[0]) || p.photo_url || `https://picsum.photos/seed/${p.name}/600/800`}
+                  className="w-full h-full object-cover object-top"
+                />
+                {/* Cinematic fade */}
+                <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, transparent 25%, transparent 75%, #0a0a0f 100%)' }} />
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_35%,rgba(0,0,0,0.6)_100%)] opacity-60" />
 
-          <div className="absolute bottom-0 left-0 right-0 px-5 pb-6 flex items-end justify-between z-10">
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-white text-3xl font-montserrat font-black drop-shadow-xl">
-                  {heroProfile.name}
-                </span>
-                {calculateAge(heroProfile.dob) > 0 && (
-                  <span className="bg-white/10 backdrop-blur-xl text-white/80 px-3 py-1 rounded-xl text-xl font-black border border-white/10">
-                    {calculateAge(heroProfile.dob)}
-                  </span>
-                )}
-              </div>
-              {heroProfile.city && (
-                <div className="flex items-center gap-1.5 text-white/50 text-xs font-bold">
-                  <MapPin className="w-3 h-3 text-rose-500" />
-                  {heroProfile.city}
+                {/* Info & CTA block */}
+                <div className="absolute bottom-0 left-0 right-0 px-5 pb-6 flex items-end justify-between z-10 pointer-events-none">
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-white text-3xl font-montserrat font-black drop-shadow-xl">
+                        {p.name}
+                      </span>
+                      {calculateAge(p.dob) > 0 && (
+                        <span className="bg-white/10 backdrop-blur-xl text-white/80 px-3 py-1 rounded-xl text-xl font-black border border-white/10">
+                          {calculateAge(p.dob)}
+                        </span>
+                      )}
+                    </div>
+                    {p.city && (
+                      <div className="flex items-center gap-1.5 text-white/50 text-xs font-bold">
+                        <MapPin className="w-3 h-3 text-rose-500" />
+                        {p.city}
+                      </div>
+                    )}
+                  </div>
+                  <Link
+                    to={`/profile-detail/${p.id}`}
+                    className="px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest text-white active:scale-95 transition-all pointer-events-auto"
+                    style={{ background: 'linear-gradient(135deg, #f43f5e, #9333ea)', boxShadow: '0 8px 24px rgba(244,63,94,0.4)' }}
+                  >
+                    Visita
+                  </Link>
                 </div>
-              )}
-            </div>
-            <Link
-              to={`/profile-detail/${heroProfile.id}`}
-              className="px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest text-white active:scale-95 transition-all"
-              style={{ background: 'linear-gradient(135deg, #f43f5e, #9333ea)', boxShadow: '0 8px 24px rgba(244,63,94,0.4)' }}
-            >
-              Visita
-            </Link>
+              </div>
+            ))}
           </div>
 
           {heroProfiles.length > 1 && (
-            <div className="absolute top-4 right-5 flex gap-1.5 z-10">
+            <div className="absolute top-4 right-5 flex gap-1.5 z-30">
               {heroProfiles.map((_, i) => (
-                <button key={i} onClick={() => setHeroIndex(i)}
+                <button 
+                  key={i} 
+                  onClick={() => scrollToFeedHero(i)}
                   className={cn('h-1 rounded-full transition-all duration-300', i === heroIndex ? 'bg-white w-6' : 'bg-white/25 w-1.5')}
                 />
               ))}
