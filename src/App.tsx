@@ -5650,6 +5650,46 @@ const AdminPage = () => {
     }
   }, [isAuthenticated]);
 
+  // --- GOOGLE ANALYTICS 4 CLIENT INJECTION ---
+  useEffect(() => {
+    const gaId = analyticsConfig?.measurementId || analyticsConfig?.trackingId;
+    if (!analyticsConfig?.enabled || !gaId) return;
+
+    // Check if script already exists to avoid duplication
+    if (document.getElementById('ga4-script')) return;
+
+    console.log("[GA4] Injecting client-side tracking for ID:", gaId);
+    
+    // 1. Inietta lo script principale di GTAG
+    const script = document.createElement('script');
+    script.id = 'ga4-script';
+    script.async = true;
+    script.src = `https://www.googletagmanager.com/gtag/js?id=${gaId}`;
+    document.head.appendChild(script);
+
+    // 2. Inietta il codice di configurazione
+    const configScript = document.createElement('script');
+    configScript.id = 'ga4-config-script';
+    configScript.innerHTML = `
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', '${gaId}', { 'anonymize_ip': true });
+      console.log('[GA4] Initialized correctly.');
+    `;
+    document.head.appendChild(configScript);
+
+    // 3. Inietta il tag di verifica se presente (non distruttivo)
+    if (analyticsConfig?.verificationTag && analyticsConfig.verificationTag.includes('<meta')) {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = analyticsConfig.verificationTag;
+        const meta = tempDiv.querySelector('meta');
+        if (meta && !document.querySelector(`meta[name="${meta.name}"]`)) {
+            document.head.appendChild(meta);
+        }
+    }
+  }, [analyticsConfig?.enabled, analyticsConfig?.measurementId, analyticsConfig?.trackingId]);
+
   const fetchAdminModules = async () => {
     try {
       // 1. First attempt fetching from Supabase (Persistent Source)

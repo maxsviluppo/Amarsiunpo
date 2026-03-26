@@ -386,6 +386,12 @@ async function startServer() {
   let lastSync = 0;
 
   async function syncCloudConfigs() {
+    const now = Date.now();
+    // Cache per 1 minuto (60000ms) per evitare rallentamenti e timeout
+    if (now - lastSync < 60000 && (cachedSeo || cachedAdSense || cachedAnalytics)) {
+      return;
+    }
+    
     console.log("[CloudSync] Inizializzazione sincronizzazione cloud...");
     
     // 1. Try Supabase first (Primary Cloud)
@@ -413,6 +419,7 @@ async function startServer() {
              }
           }
         });
+        lastSync = now;
         console.log("[Supabase] Configs synced from cloud");
       }
     } catch (err) {
