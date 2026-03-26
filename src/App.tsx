@@ -58,7 +58,8 @@ import {
   Activity,
   BarChart3,
   Radio,
-  Save
+  Save,
+  Check
 } from 'lucide-react';
 import { cn, calculateAge, calculateMatchScore, fileToBase64, playTapSound, ITALIAN_CITIES } from './utils';
 import { UserProfile, ChatRequest, Post, SoulLink } from './types';
@@ -5651,33 +5652,34 @@ const AdminPage = () => {
 
   const fetchAdminModules = async () => {
     try {
-      const [seoRes, adsenseRes, analyticsRes, trafficRes] = await Promise.all([
-        fetch(`${API_BASE}/api/admin/seo`),
-        fetch(`${API_BASE}/api/admin/adsense`),
-        fetch(`${API_BASE}/api/admin/analytics`),
-        fetch(`${API_BASE}/api/admin/traffic`),
-      ]);
+      // 1. First attempt fetching from Supabase (Persistent Source)
+      const { data: supabaseItems, error: sbError } = await supabase
+        .from('site_settings')
+        .select('*');
 
-      if (seoRes.ok) {
-        const val = await seoRes.json();
-        if (val && !val.all) setSeoConfig({ all: val });
-        else setSeoConfig(val || { all: { title: '', description: '', keywords: '', url: '', htmlTag: '' } });
-      }
-      if (adsenseRes.ok) {
-        const val = await adsenseRes.json();
-        setAdsenseConfig(val || { enabled: false, client: '', slot: '', format: 'auto', responsive: 'true', metaTag: '', adsTxt: '' });
-      }
-      if (analyticsRes.ok) {
-        const val = await analyticsRes.json();
-        // Support both field name variants
-        setAnalyticsConfig({ 
-          enabled: false, 
-          measurementId: '', 
-          trackingId: '', 
-          verificationTag: '', 
-          ...(val || {}) 
+      if (!sbError && supabaseItems) {
+        supabaseItems.forEach((item: any) => {
+          try {
+            const val = JSON.parse(item.value);
+            if (item.key === 'seo_configs') {
+              if (val && !val.all) setSeoConfig({ all: val });
+              else setSeoConfig(val);
+            } else if (item.key === 'adsense_config') {
+              setAdsenseConfig(val);
+            } else if (item.key === 'analytics_config') {
+              setAnalyticsConfig(val);
+            }
+          } catch (e) {
+            console.error('Error parsing supabase settings:', item.key, e);
+          }
         });
       }
+
+      // 2. Fetch traffic and other local-only states
+      const [trafficRes] = await Promise.all([
+        fetch(`${API_BASE}/api/admin/traffic`)
+      ]);
+
       if (trafficRes.ok) {
         const val = await trafficRes.json();
         setTrafficStats(prev => ({
