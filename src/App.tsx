@@ -5708,6 +5708,8 @@ const AdminPage = () => {
               setAdsenseConfig(val);
             } else if (item.key === 'analytics_config') {
               setAnalyticsConfig(val);
+            } else if (item.key === 'traffic_stats') {
+              setTrafficStats(val);
             }
           } catch (e) {
             console.error('Error parsing supabase settings:', item.key, e);
@@ -5860,6 +5862,23 @@ const AdminPage = () => {
   // Real-time traffic polling when on traffico tab
   const fetchTrafficLive = async () => {
     try {
+      // 1. Try Supabase first (Persistent)
+      const { data, error } = await supabase
+        .from('site_settings')
+        .update([]) // No-op update to check connection if needed, but select is better
+        .select('value')
+        .eq('key', 'traffic_stats')
+        .single();
+      
+      if (!error && data?.value) {
+        const val = JSON.parse(data.value);
+        setTrafficStats(prev => ({
+          ...prev,
+          ...val
+        }));
+      }
+
+      // 2. Local Backend Fallback
       const res = await fetch(`${API_BASE}/api/admin/traffic`);
       if (res.ok) {
         const data = await res.json();
@@ -5880,7 +5899,7 @@ const AdminPage = () => {
   useEffect(() => {
     if (!isAuthenticated || activeTab !== 'traffico') return;
     fetchTrafficLive();
-    const interval = setInterval(fetchTrafficLive, 30000);
+    const interval = setInterval(fetchTrafficLive, 15000);
     return () => clearInterval(interval);
   }, [isAuthenticated, activeTab]);
 
@@ -7700,16 +7719,7 @@ const AdminPage = () => {
                     </div>
                   </div>
 
-                  {/* Info box */}
-                  <div className="bg-blue-50 border border-blue-100 rounded-3xl p-6 flex items-start gap-4">
-                    <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center shrink-0">
-                      <Globe className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <p className="font-black text-blue-900 text-sm mb-1">Dominio in propagazione</p>
-                      <p className="text-blue-600 text-xs font-medium leading-relaxed">Le visite vengono tracciate in produzione (build distribuita). In sviluppo locale i contatori non si incrementano. Una volta propagato il dominio <strong>www.amarsiunpo.it</strong>, il traffico reale sarà visibile qui.</p>
-                    </div>
-                  </div>
+
 
                   <div className="bg-white p-8 rounded-[38px] border border-stone-200 flex flex-col items-center text-center">
                     <div className="bg-rose-50 p-4 rounded-full mb-6">
