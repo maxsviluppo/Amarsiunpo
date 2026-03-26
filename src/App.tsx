@@ -5694,54 +5694,86 @@ const AdminPage = () => {
   const saveSeo = async (data: any) => {
     if (!data) return;
     setIsSaving(true);
+    let success = false;
     try {
-      const res = await fetch(`${API_BASE}/api/admin/seo`, {
+      // 1. Direct Supabase (Primary for Dynamic Sites)
+      const { error } = await supabase.from('site_settings').upsert({
+        key: 'seo_configs',
+        value: JSON.stringify(data)
+      });
+      if (!error) success = true;
+
+      // 2. Local/Backend Sync (Optional fallback)
+      await fetch(`${API_BASE}/api/admin/seo`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
-      });
-      if (res.ok) {
+      }).catch(() => {/* ignore backend failure if supabase worked */});
+      
+      if (success) {
         setSeoConfig(data);
         setShowSuccessModal(true);
         setTimeout(() => setShowSuccessModal(false), 3000);
-      } else throw new Error('Server error');
-    } catch (e) { setToast({ message: 'Errore salvataggio SEO', type: 'error' }); }
+      } else throw new Error('Supabase error');
+    } catch (e) { 
+      setToast({ message: 'Errore salvataggio SEO su Cloud', type: 'error' }); 
+    }
     setIsSaving(false);
   };
 
   const saveAdSense = async (data: any) => {
     setIsSaving(true);
+    let success = false;
     try {
-      const res = await fetch(`${API_BASE}/api/admin/adsense`, {
+      // 1. Direct Supabase
+      const { error } = await supabase.from('site_settings').upsert({
+        key: 'adsense_config',
+        value: JSON.stringify(data)
+      });
+      if (!error) success = true;
+
+      // 2. Sync with local backend
+      await fetch(`${API_BASE}/api/admin/adsense`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
-      });
-      if (res.ok) {
+      }).catch(() => {});
+
+      if (success) {
         setAdsenseConfig(data);
         setShowSuccessModal(true);
         setTimeout(() => setShowSuccessModal(false), 3000);
-      } else throw new Error('Server error');
-    } catch (e) { setToast({ message: 'Errore salvataggio AdSense', type: 'error' }); }
+      } else throw new Error();
+    } catch (e) { setToast({ message: 'Errore salvataggio AdSense su Cloud', type: 'error' }); }
     setIsSaving(false);
   };
 
   const saveAnalytics = async (data: any) => {
     setIsSaving(true);
+    let success = false;
     try {
-      // Ensure both field names are saved for compatibility
       const toSave = { ...data, trackingId: data.measurementId || data.trackingId };
-      const res = await fetch(`${API_BASE}/api/admin/analytics`, {
+      
+      // 1. Direct Supabase
+      const { error } = await supabase.from('site_settings').upsert({
+        key: 'analytics_config',
+        value: JSON.stringify(toSave)
+      });
+      if (!error) success = true;
+
+      // 2. Local Backend
+      await fetch(`${API_BASE}/api/admin/analytics`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(toSave)
-      });
-      if (res.ok) {
+      }).catch(() => {});
+
+      if (success) {
         setAnalyticsConfig(data);
         setShowSuccessModal(true);
         setTimeout(() => setShowSuccessModal(false), 3000);
-      } else throw new Error('Server error');
-    } catch (e) { setToast({ message: 'Errore salvataggio Analytics', type: 'error' }); }
+      } else throw new Error();
+    } catch (e) { setToast({ message: 'Errore salvataggio Analytics su Cloud', type: 'error' }); }
     setIsSaving(false);
   };
 
