@@ -1406,13 +1406,22 @@ const HomePage = () => {
 
   useEffect(() => {
     window.scrollTo(0, 0);
-    try {
-      const saved = localStorage.getItem('amarsiunpo_user');
-      if (saved) {
-        setIsLoggedIn(true);
-        setCurrentUser(normalizeUser(JSON.parse(saved)));
-      }
-    } catch (e) { }
+    const handleAuthChange = () => {
+      try {
+        const saved = localStorage.getItem('amarsiunpo_user');
+        if (saved) {
+          const u = normalizeUser(JSON.parse(saved));
+          setIsLoggedIn(!!u.name);
+          setCurrentUser(u);
+        } else {
+          setIsLoggedIn(false);
+          setCurrentUser(null);
+        }
+      } catch (e) { }
+    };
+
+    handleAuthChange();
+    window.addEventListener('user-auth-change', handleAuthChange);
 
     const fetchSettings = async () => {
       try {
@@ -1421,6 +1430,8 @@ const HomePage = () => {
       } catch (e) { }
     };
     fetchSettings();
+
+    return () => window.removeEventListener('user-auth-change', handleAuthChange);
   }, []);
 
   const handleShare = async () => {
@@ -8320,7 +8331,7 @@ const RegisterPage = ({ setSecurityStatus }: { setSecurityStatus: any }) => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: window.location.origin + '/bacheca'
+        redirectTo: window.location.origin + '/register'
       }
     });
     if (error) setToast({ message: "Errore login " + provider + ": " + error.message, type: 'error' });
@@ -11163,7 +11174,7 @@ const ProfilePage = () => {
     submissionData.looking_for_gender = JSON.stringify(submissionData.looking_for_gender || []);
     submissionData.conosciamoci_meglio = JSON.stringify(submissionData.conosciamoci_meglio || {});
 
-    const { error } = await supabase.from('users').update(submissionData).eq('id', user.id);
+    const { error } = await supabase.from('users').upsert({ ...submissionData, id: user.id });
     if (!error) {
       setToast({ message: '✅ Profilo aggiornato!', type: 'success' });
       fetchData(user.id);
@@ -12858,67 +12869,83 @@ export default function App() {
     setSecurityStatus({ type: null });
   };
   useEffect(() => {
-    // 1. Silent verification of the user profile on app startup
+    // 0. Listen for Supabase Auth changes (Google OAuth login)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("[Auth] Event:", event, session?.user?.email);
+      
+      if (session?.user) {
+        // Fetch public profile
+        const { data, error } = await supabase.from('users')
+          .select('id, email, is_online, last_seen, is_blocked, is_suspended, doc_rejected, doc_rejected_at, last_warning_reason, suspension_reason, has_post_removal_notice, is_paid, subscription_type, subscription_expiry')
+          .eq('id', session.user.id)
+          .maybeSingle();
+
+        if (data && !error) {
+          const updated = normalizeUser({ ...data, email: session.user.email });
+          localStorage.setItem('amarsiunpo_user', JSON.stringify(updated));
+          setCurrentUser(updated);
+          window.dispatchEvent(new Event('user-auth-change'));
+        } else if (event === 'SIGNED_IN') {
+          // New OAuth user - no profile yet
+          const partial = { id: session.user.id, email: session.user.email, is_new_oauth: true };
+          localStorage.setItem('amarsiunpo_user', JSON.stringify(partial));
+          setCurrentUser(partial as any);
+          window.dispatchEvent(new Event('user-auth-change'));
+        }
+      } else if (event === 'SIGNED_OUT') {
+        localStorage.removeItem('amarsiunpo_user');
+        setCurrentUser(null);
+        window.dispatchEvent(new Event('user-auth-change'));
+      }
+    });
+
+    // 1. Initial verification logic
     const verifyUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
       const saved = localStorage.getItem('amarsiunpo_user');
+
+      if (session?.user) {
+        // Handled by change listener, but good to have here for mount
+        const { data } = await supabase.from('users').select('*').eq('id', session.user.id).maybeSingle();
+        if (data) {
+          const u = normalizeUser({ ...data, email: session.user.email });
+          setCurrentUser(u);
+          localStorage.setItem('amarsiunpo_user', JSON.stringify(u));
+        } else {
+          const partial = { id: session.user.id, email: session.user.email, is_new_oauth: true };
+          setCurrentUser(partial as any);
+          localStorage.setItem('amarsiunpo_user', JSON.stringify(partial));
+        }
+        return;
+      }
+
       if (saved) {
         try {
           const u = JSON.parse(saved);
-            const isLocalId = /^\d+$/.test(String(u.id));
-            if (isLocalId) {
-              // Per utenti locali saltiamo la verifica Supabase e aggiorniamo is_online
-              setCurrentUser(normalizeUser(u));
-              return;
-            }
-
-            // Use maybeSingle to avoid error on 0 rows
-            const { data, error } = await supabase.from('users')
-              .select('id, email, is_online, last_seen, is_blocked, is_suspended, doc_rejected, doc_rejected_at, last_warning_reason, suspension_reason, has_post_removal_notice, is_paid, subscription_type, subscription_expiry')
-              .eq('id', u.id)
-              .maybeSingle();
-
-            if (error) {
-              console.error("Errore verifica sessione (DB):", error);
-              return;
-            }
-
-            if (!data) {
-              console.warn("Profilo non trovato nel database. Pulizia sessione locale.");
-              localStorage.removeItem('amarsiunpo_user');
-              window.dispatchEvent(new Event('user-auth-change'));
-            } else {
-              // Check security status
-              if (data.is_blocked) {
-                setSecurityStatus({ type: 'blocked' });
-              } else if (data.is_suspended) {
-                setSecurityStatus({ type: 'suspended', reason: data.suspension_reason });
-              } else if (data.has_post_removal_notice) {
-                setSecurityStatus({ type: 'post_removed' });
-              } else if (data.doc_rejected) {
-                setSecurityStatus({ type: 'doc_rejected', rejectedAt: data.doc_rejected_at });
-              } else if (data.last_warning_reason) {
-                const warned = localStorage.getItem('amarsiunpo_warned_id');
-                if (warned !== data.last_warning_reason) {
-                  setSecurityStatus({ type: 'warning', reason: data.last_warning_reason });
-                  localStorage.setItem('amarsiunpo_warned_id', data.last_warning_reason);
-                } else {
-                  setSecurityStatus({ type: null });
-                }
-              } else {
-                setSecurityStatus({ type: null });
-              }
-
-              // Update status and storage if changed
-              const updatedUser = normalizeUser({ ...u, ...data });
-              setCurrentUser(updatedUser);
-              localStorage.setItem('amarsiunpo_user', JSON.stringify(updatedUser));
-            await supabase.from('users').update({ is_online: true, last_seen: new Date().toISOString() }).eq('id', u.id);
+          const isLocalId = /^\d+$/.test(String(u.id));
+          if (isLocalId) {
+            setCurrentUser(normalizeUser(u));
+            return;
           }
-        } catch (e) {
-          console.error("Errore verifica sessione (Local):", e);
-        }
-      } else {
-        setCurrentUser(null);
+
+          const { data, error } = await supabase.from('users')
+            .select('id, email, is_online, last_seen, is_blocked, is_suspended, doc_rejected, doc_rejected_at, last_warning_reason, suspension_reason, has_post_removal_notice, is_paid, subscription_type, subscription_expiry')
+            .eq('id', u.id)
+            .maybeSingle();
+
+          if (data && !error) {
+             const updatedUser = normalizeUser({ ...u, ...data });
+             setCurrentUser(updatedUser);
+             localStorage.setItem('amarsiunpo_user', JSON.stringify(updatedUser));
+          } else if (!data && !error) {
+             // User from local storage not found in DB - clear unless it's a partial register session
+             if (!u.is_new_oauth) {
+                localStorage.removeItem('amarsiunpo_user');
+                setCurrentUser(null);
+                window.dispatchEvent(new Event('user-auth-change'));
+             }
+          }
+        } catch (e) { }
       }
     };
     verifyUser();
@@ -12980,6 +13007,7 @@ export default function App() {
 
     window.addEventListener('mousedown', handleGlobalClick);
     return () => {
+      subscription.unsubscribe();
       clearInterval(heartbeatInterval);
       window.removeEventListener('mousedown', handleGlobalClick);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
