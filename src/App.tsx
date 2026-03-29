@@ -12966,9 +12966,22 @@ export default function App() {
           localStorage.setItem('amarsiunpo_user', JSON.stringify(updated));
           setCurrentUser(updated);
           window.dispatchEvent(new Event('user-auth-change'));
-        } else if (event === 'SIGNED_IN') {
-          // New OAuth user - no profile yet
-          const partial = { id: session.user.id, email: session.user.email, is_new_oauth: true };
+        } else {
+          // New OAuth user or missing profile - create partial record immediately to ensure DB existence
+          console.log("[Auth] Creating partial profile for new user:", session.user.id);
+          const partial = { 
+            id: session.user.id, 
+            email: session.user.email, 
+            is_new_oauth: true,
+            is_online: true,
+            last_seen: new Date().toISOString()
+          };
+          
+          // Perform async upsert - don't wait for it if not necessary but good to have
+          supabase.from('users').upsert([partial]).then(({ error: upsertErr }) => {
+             if (upsertErr) console.warn("Partial profile creation warning:", upsertErr);
+          });
+
           localStorage.setItem('amarsiunpo_user', JSON.stringify(partial));
           setCurrentUser(partial as any);
           window.dispatchEvent(new Event('user-auth-change'));
@@ -12993,9 +13006,18 @@ export default function App() {
           setCurrentUser(u);
           localStorage.setItem('amarsiunpo_user', JSON.stringify(u));
         } else {
+          // Missing profile on verify - handle like new OAuth
+          console.log("[Auth Mount] Missing profile, ensuring partial record exists");
           const partial = { id: session.user.id, email: session.user.email, is_new_oauth: true };
-          setCurrentUser(partial as any);
+          
+          // Ensure DB has at least this partial record
+          supabase.from('users').upsert([partial]).select().then(({ data: upsertData }) => {
+              const finalUser = upsertData?.[0] || partial;
+              setCurrentUser(normalizeUser(finalUser) as any);
+          });
+          
           localStorage.setItem('amarsiunpo_user', JSON.stringify(partial));
+          setCurrentUser(partial as any);
         }
         return;
       }
