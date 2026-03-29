@@ -13091,17 +13091,15 @@ export default function App() {
       <Navbar />
       <Routes>
         <Route path="/" element={<HomePage />} />
-        
-        {/* Pagine protette: se loggati ma senza profilo (nuovo OAuth), forziamo il /register */}
-        <Route path="/bacheca" element={currentUser?.id ? (currentUser.name ? <BachecaPage /> : <Navigate to="/register" />) : <HomePage />} />
-        <Route path="/feed" element={currentUser?.id ? (currentUser.name ? <FeedPage /> : <Navigate to="/register" />) : <HomePage />} />
-        <Route path="/amici" element={currentUser?.id ? (currentUser.name ? <AmiciPage /> : <Navigate to="/register" />) : <HomePage />} />
-        <Route path="/soul-match" element={currentUser?.id ? (currentUser.name ? <AMARSIUNPOPage /> : <Navigate to="/register" />) : <HomePage />} />
+        <Route path="/bacheca" element={<BachecaPage />} />
+        <Route path="/feed" element={<FeedPage />} />
+        <Route path="/amici" element={<AmiciPage />} />
+        <Route path="/soul-match" element={<AMARSIUNPOPage />} />
         <Route path="/register" element={<RegisterPage setSecurityStatus={setSecurityStatus} />} />
-        <Route path="/chat" element={currentUser?.id ? (currentUser.name ? <ChatPage /> : <Navigate to="/register" />) : <HomePage />} />
-        <Route path="/live-chat/:id" element={currentUser?.id ? (currentUser.name ? <LiveChatPage /> : <Navigate to="/register" />) : <HomePage />} />
-        <Route path="/profile" element={currentUser?.id ? (currentUser.name ? <ProfilePage /> : <Navigate to="/register" />) : <HomePage />} />
-        <Route path="/edit-profile" element={currentUser?.id ? (currentUser.name ? <EditProfilePage /> : <Navigate to="/register" />) : <HomePage />} />
+        <Route path="/chat" element={<ChatPage />} />
+        <Route path="/live-chat/:id" element={<LiveChatPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/edit-profile" element={<EditProfilePage />} />
         
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/profile-detail/:id" element={<ProfileDetailPage />} />
