@@ -1002,9 +1002,17 @@ const Navbar = () => {
       const saved = localStorage.getItem('amarsiunpo_user');
       if (saved) {
         try {
-          setUser(normalizeUser(JSON.parse(saved)));
+          const parsed = JSON.parse(saved);
+          // Verifica che l'utente sia "reale" (abbia ID e Nome/Email)
+          if (parsed && (parsed.id) && (parsed.name || parsed.email)) {
+            setUser(normalizeUser(parsed));
+          } else {
+            localStorage.removeItem('amarsiunpo_user');
+            setUser(null);
+          }
         } catch (e) {
-          console.error("Auth sync error:", e);
+          localStorage.removeItem('amarsiunpo_user');
+          setUser(null);
         }
       }
       else setUser(null);
@@ -12845,6 +12853,34 @@ const ScrollToTop = () => {
   return null;
 };
 
+// Componente guardia per proteggere le rotte
+const RequireAuth = ({ children }: { children: JSX.Element }) => {
+  const [currentUser, setCurrentUser] = useState<any>(undefined);
+  
+  useEffect(() => {
+    const handleAuthChange = () => {
+      const saved = localStorage.getItem('amarsiunpo_user');
+      if (saved) {
+        try {
+          const u = JSON.parse(saved);
+          if (u && u.id && (u.name || u.email)) setCurrentUser(normalizeUser(u));
+          else setCurrentUser(null);
+        } catch { setCurrentUser(null); }
+      } else {
+        setCurrentUser(null);
+      }
+    };
+    handleAuthChange();
+    window.addEventListener('user-auth-change', handleAuthChange);
+    return () => window.removeEventListener('user-auth-change', handleAuthChange);
+  }, []);
+
+  if (currentUser === undefined) return null; // Caricamento
+  // Se non loggato, rimanda a /register (che fa da login/registrazione)
+  if (!currentUser) return <Navigate to="/register" />;
+  return children;
+};
+
 export default function App() {
   const [securityStatus, setSecurityStatus] = useState<any>({ type: null });
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
@@ -12925,6 +12961,15 @@ export default function App() {
         try {
           const u = JSON.parse(saved);
           const isLocalId = /^\d+$/.test(String(u.id));
+          
+          // Verifica integrità dati locali
+          if (!u || !u.id || (!u.name && !u.email)) {
+             localStorage.removeItem('amarsiunpo_user');
+             setCurrentUser(null);
+             window.dispatchEvent(new Event('user-auth-change'));
+             return;
+          }
+
           if (isLocalId) {
             setCurrentUser(normalizeUser(u));
             return;
@@ -12947,7 +12992,11 @@ export default function App() {
                 window.dispatchEvent(new Event('user-auth-change'));
              }
           }
-        } catch (e) { }
+        } catch (e) {
+          localStorage.removeItem('amarsiunpo_user');
+          setCurrentUser(null);
+          window.dispatchEvent(new Event('user-auth-change'));
+        }
       }
     };
     verifyUser();
@@ -13091,18 +13140,22 @@ export default function App() {
       <Navbar />
       <Routes>
         <Route path="/" element={<HomePage />} />
-        <Route path="/bacheca" element={<BachecaPage />} />
-        <Route path="/feed" element={<FeedPage />} />
-        <Route path="/amici" element={<AmiciPage />} />
-        <Route path="/soul-match" element={<AMARSIUNPOPage />} />
+        
+        {/* Pagine Protette: Richiedono login */}
+        <Route path="/bacheca" element={<RequireAuth><BachecaPage /></RequireAuth>} />
+        <Route path="/feed" element={<RequireAuth><FeedPage /></RequireAuth>} />
+        <Route path="/amici" element={<RequireAuth><AmiciPage /></RequireAuth>} />
+        <Route path="/soul-match" element={<RequireAuth><AMARSIUNPOPage /></RequireAuth>} />
+        
         <Route path="/register" element={<RegisterPage setSecurityStatus={setSecurityStatus} />} />
-        <Route path="/chat" element={<ChatPage />} />
-        <Route path="/live-chat/:id" element={<LiveChatPage />} />
-        <Route path="/profile" element={<ProfilePage />} />
-        <Route path="/edit-profile" element={<EditProfilePage />} />
+        
+        <Route path="/chat" element={<RequireAuth><ChatPage /></RequireAuth>} />
+        <Route path="/live-chat/:id" element={<RequireAuth><LiveChatPage /></RequireAuth>} />
+        <Route path="/profile" element={<RequireAuth><ProfilePage /></RequireAuth>} />
+        <Route path="/edit-profile" element={<RequireAuth><EditProfilePage /></RequireAuth>} />
         
         <Route path="/admin" element={<AdminPage />} />
-        <Route path="/profile-detail/:id" element={<ProfileDetailPage />} />
+        <Route path="/profile-detail/:id" element={<RequireAuth><ProfileDetailPage /></RequireAuth>} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/cookie" element={<CookiePage />} />
         <Route path="/termini" element={<TerminiPage />} />
