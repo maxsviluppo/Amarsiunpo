@@ -1571,6 +1571,7 @@ const HomePage = () => {
             )}
           </motion.div>
 
+          {/* 
           {!isLoggedIn && (
             <div className="flex justify-center mt-4">
               <button onClick={() => window.location.href = '/register'} className="flex items-center w-full max-w-[280px] justify-center gap-2 bg-white/5 backdrop-blur-xl border border-white/10 text-white/70 py-3 rounded-[16px] font-black text-[11px] hover:bg-white/10 hover:border-white/20 transition-all uppercase tracking-widest">
@@ -1579,6 +1580,7 @@ const HomePage = () => {
               </button>
             </div>
           )}
+          */}
 
         </div>
 
